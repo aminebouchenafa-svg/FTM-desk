@@ -106,6 +106,7 @@ tr:last-child td{border-bottom:0}
     <nav id="tabs" aria-label="Sections">
       <button data-t="today">Aujourd'hui</button>
       <button data-t="evals">Évals OPL</button>
+      <button data-t="vols">Vols instr.</button>
       <button data-t="simu">Simu</button>
       <button data-t="licences">Licences</button>
       <button data-t="equipes">Équipes</button>
@@ -134,11 +135,11 @@ const MOIS = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.
 const dayLabel = s => { const d = new Date(s+"T00:00:00"); return JOURS[d.getDay()]+" "+d.getDate()+" "+MOIS[d.getMonth()]; };
 $("#today").textContent = dayLabel(TODAY_ISO) + " " + TODAY.getFullYear();
 
-const st = { opl:{}, ref:{}, simu:{}, taches:{}, loaded:{opl:false,ref:false,simu:false,taches:false}, db:null, canWrite:true };
-const ui = { tab:"today", simuMonth:null, simuFilter:"all", showPipeline:false, form:{}, licQ:"", eqQ:"", licFilter:"todo" };
+const st = { opl:{}, ref:{}, simu:{}, taches:{}, vols:{}, loaded:{opl:false,ref:false,simu:false,taches:false,vols:false}, db:null, canWrite:true };
+const ui = { tab:"today", simuMonth:null, simuFilter:"all", showPipeline:false, form:{}, licQ:"", eqQ:"", licFilter:"todo", volF:"all", volQ:"", volOpen:{} };
 try { const t = localStorage.getItem("ftm.tab"); if (t) ui.tab = t; } catch(e) {}
 const hashTab = (location.hash||"").slice(1);
-if (["today","evals","simu","licences","equipes"].includes(hashTab)) ui.tab = hashTab;
+if (["today","evals","vols","simu","licences","equipes"].includes(hashTab)) ui.tab = hashTab;
 
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(()=>t.hidden = true, 2600); }
 
@@ -207,8 +208,73 @@ function alerts(){
     A.push({k: s.date<=addDays(TODAY_ISO,3)?"crit":"warn", tab:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
   const nl = lics().filter(r=>licStatus(r).k==="crit").length;
   if (nl) A.push({k:"warn", tab:"licences", t:`${nl} licences échues à faire renouveler`, s:"Selon l'état de suivi du 30/08/2026"});
+  trainees().filter(t=>t.lache && t.lache>=addDays(TODAY_ISO,-7)).forEach(t=>
+    A.push({k:"info", tab:"vols", t:`${t.nom} lâché le ${frDate(t.lache)}`, s:"Penser à clôturer son dossier de formation"}));
   const order = {crit:0,warn:1,info:2};
   return A.sort((a,b)=>order[a.k]-order[b.k]);
+}
+
+/* ---------- vols d'instruction (exports TrainerU) ---------- */
+const VCODE = {i:"Instr. ligne", n:"Instr. PL", p:"Pré-contrôle", c:"Lâché", e:"Contrôle ligne", v:"Éval"};
+const VGROUP = {i:"instr", n:"instr", p:"ctrl", c:"ctrl", e:"ctrl", v:"eval"};
+function volsRows(){
+  const seen = new Set(), out = [];
+  Object.values(st.vols).forEach(rep=>(rep.rows||[]).forEach(r=>{
+    const k = r.date+"|"+r.heure+"|"+(r.stagiaire.id||r.stagiaire.nom);
+    if (!seen.has(k)) { seen.add(k); out.push(r); }
+  }));
+  return out.sort((a,b)=>b.date.localeCompare(a.date) || String(b.heure).localeCompare(String(a.heure)));
+}
+function trainees(){
+  const T = {};
+  volsRows().forEach(r=>{
+    const k = r.stagiaire.nom.toUpperCase().replace(/\s+/g," ");
+    const t = T[k] = T[k] || {key:k, nom:r.stagiaire.nom, pos:r.stagiaire.pos, id:r.stagiaire.id, vols:[], n:{}, last:"", lache:""};
+    t.vols.push(r); t.n[r.code]=(t.n[r.code]||0)+1;
+    if (r.date>t.last) t.last=r.date;
+    if (r.code==="c" && r.date>t.lache) t.lache=r.date;
+  });
+  return Object.values(T);
+}
+function traineeStatus(t){
+  if (t.n.c) return {k:"ok", t:"Lâché"};
+  if (t.n.e) return {k:"ok", t:"Contrôle ligne"};
+  if (t.n.p) return {k:"info", t:"Pré-contrôle fait"};
+  if (t.n.v && !t.n.i && !t.n.n) return {k:"info", t:"En évaluation"};
+  return {k:"warn", t:"En instruction"};
+}
+function vVols(){
+  const reps = Object.entries(st.vols).sort((a,b)=>b[0].localeCompare(a[0]));
+  if (!reps.length) return `<div class="empty-state">Aucun export TrainerU importé. Envoie-moi le fichier « Crew Training Schedule » et je le charge ici.</div>`;
+  const q = ui.volQ.trim().toLowerCase();
+  const T = trainees()
+    .filter(t=> ui.volF==="all" || t.vols.some(v=>VGROUP[v.code]===ui.volF))
+    .filter(t=> !q || t.nom.toLowerCase().includes(q) || t.vols.some(v=>v.instr.nom.toLowerCase().includes(q)))
+    .sort((a,b)=>b.last.localeCompare(a.last) || a.nom.localeCompare(b.nom));
+  const R = volsRows(), last = reps[0][1];
+  const nLache = trainees().filter(t=>t.n.c).length;
+  return `
+  <div class="kpis">
+    <div class="kpi"><b>${R.length}</b><span>activités en vol</span></div>
+    <div class="kpi"><b>${trainees().length}</b><span>stagiaires suivis</span></div>
+    <div class="kpi ok"><b>${nLache}</b><span>lâchés</span></div>
+    <div class="kpi"><b>${R.filter(r=>r.code==="v").length}</b><span>vols d'évaluation</span></div>
+  </div>
+  <div class="note">Dernier export : ${esc(last.periode||reps[0][0])} (${esc(last.source||"")}). ${reps.length>1?reps.length+" exports cumulés, doublons retirés.":""}</div>
+  <input type="search" id="volQ" placeholder="Chercher un stagiaire ou un instructeur…" value="${esc(ui.volQ)}">
+  <div class="seg" role="group" aria-label="Filtre">
+    <button data-vf="all" aria-pressed="${ui.volF==="all"}">Tous</button>
+    <button data-vf="instr" aria-pressed="${ui.volF==="instr"}">Instruction</button>
+    <button data-vf="ctrl" aria-pressed="${ui.volF==="ctrl"}">Contrôles</button>
+    <button data-vf="eval" aria-pressed="${ui.volF==="eval"}">Évals</button>
+  </div>
+  <section class="grid2">${T.map(t=>{ const s = traineeStatus(t), open = ui.volOpen[t.key];
+    return `<article class="card">
+      <div class="row spread"><div><div class="name">${esc(t.nom)}</div><div class="mono">${esc(t.pos)} · ${esc(t.id)}</div></div><span class="pill ${s.k}">${s.t}</span></div>
+      <div class="chips">${Object.entries(t.n).map(([c,n])=>`<span class="chip">${VCODE[c]||c} × ${n}</span>`).join("")}</div>
+      <div class="row spread"><span class="note">Dernier vol ${frDate(t.last)}</span><button class="b sm" data-vopen="${esc(t.key)}">${open?"Masquer":"Détail ("+t.vols.length+")"}</button></div>
+      ${open?`<div class="prog">${t.vols.map(v=>`<div class="p"><span class="mono">${frDate(v.date)}</span><span class="pill ${v.code==="c"||v.code==="e"?"ok":(v.code==="v"||v.code==="p"?"info":"mute")}">${VCODE[v.code]||esc(v.libelle)}</span><b>${esc(v.instr.nom)}</b><span class="mono">${esc(v.vols)} ${esc(v.avion)}</span></div>`).join("")}</div>`:""}
+    </article>`;}).join("") || `<div class="empty-state">Aucun stagiaire pour ce filtre.</div>`}</section>`;
 }
 
 /* ---------- views ---------- */
@@ -407,7 +473,7 @@ function render(){
   if (!st.db && st.dbFailed) { $("#view").innerHTML = `<div class="empty-state">Ouvre cette page depuis claude.ai en étant connecté pour voir et modifier tes données.</div>`; return; }
   if (!all) return;
   const focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
-  $("#view").innerHTML = ({today:vToday, evals:vEvals, simu:vSimu, licences:vLicences, equipes:vEquipes}[ui.tab]||vToday)();
+  $("#view").innerHTML = ({today:vToday, evals:vEvals, vols:vVols, simu:vSimu, licences:vLicences, equipes:vEquipes}[ui.tab]||vToday)();
   if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos);}catch(e){} } }
 }
 function go(t){ ui.tab=t; try{localStorage.setItem("ftm.tab",t);}catch(e){} render(); window.scrollTo(0,0); }
@@ -433,6 +499,8 @@ V.addEventListener("click", async e=>{
   if (d.month) { ui.simuMonth=d.month; return render(); }
   if (d.sf) { ui.simuFilter=d.sf; return render(); }
   if (d.lf) { ui.licFilter=d.lf; return render(); }
+  if (d.vf) { ui.volF=d.vf; return render(); }
+  if (d.vopen) { ui.volOpen[d.vopen]=!ui.volOpen[d.vopen]; return render(); }
   if (d.slot) { ui.form.slot=d.slot; render(); document.getElementById("slotin")?.focus(); return; }
   if (d.lic) { const R = lics().map(r=>({...r})); R[+d.lic].fait=!R[+d.lic].fait; return write("ref/licences", {rows:R}, R[+d.lic].fait?"Licence marquée renouvelée":"Modification annulée"); }
   if (d.deltask) { try { await st.db.doc("taches/"+d.deltask).delete(); } catch(err){ toast("Suppression impossible."); } return; }
@@ -448,6 +516,7 @@ V.addEventListener("change", e=>{
 V.addEventListener("input", e=>{
   if (e.target.id==="licQ") { ui.licQ=e.target.value; render(); }
   if (e.target.id==="eqQ") { ui.eqQ=e.target.value; render(); }
+  if (e.target.id==="volQ") { ui.volQ=e.target.value; render(); }
 });
 V.addEventListener("submit", async e=>{
   e.preventDefault(); const f = e.target;
@@ -482,6 +551,7 @@ render();
   sub("opl", s=>{ st.opl={}; s.docs.forEach(d=>st.opl[d.id]=d.data()); });
   sub("ref", s=>{ st.ref={}; s.docs.forEach(d=>st.ref[d.id]=d.data()); });
   sub("simu", s=>{ st.simu={}; s.docs.forEach(d=>st.simu[d.id]=d.data()); });
+  sub("vols", s=>{ st.vols={}; s.docs.forEach(d=>st.vols[d.id]=d.data()); });
   sub("taches", s=>{ st.taches={}; s.docs.forEach(d=>st.taches[d.id]=d.data()); });
 })();
 })();
