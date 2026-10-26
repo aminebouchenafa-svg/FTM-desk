@@ -208,6 +208,18 @@ function alerts(){
     A.push({k: s.date<=addDays(TODAY_ISO,3)?"crit":"warn", tab:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
   const nl = lics().filter(r=>licStatus(r).k==="crit").length;
   if (nl) A.push({k:"warn", tab:"licences", t:`${nl} licences échues à faire renouveler`, s:"Selon l'état de suivi du 30/08/2026"});
+  // Règle : un OPL ne fait jamais deux vols d'éval avec le même TRI.
+  // Des vols du même TRI sur des jours qui se suivent = une seule rotation, donc une seule éval.
+  const triOf = n => { const w = String(n||"").toLowerCase(); return TRI().find(t=>w.startsWith(t.toLowerCase())) || String(n||"").split(" ")[0]; };
+  oplList().forEach(o=>{
+    const V = volsRows().filter(r=>r.code==="v" && (r.stagiaire.id===o.matricule || r.stagiaire.nom.toUpperCase().startsWith(o.nom.toUpperCase().split(" ")[0]+" ")));
+    const byTri = {}; V.forEach(r=>(byTri[triOf(r.instr.nom)] = byTri[triOf(r.instr.nom)] || []).push(r.date));
+    Object.entries(byTri).forEach(([t,ds])=>{
+      const u = [...new Set(ds)].sort();
+      const twice = u.some((d,i)=>i>0 && d > addDays(u[i-1],1));
+      if (twice) A.push({k:"crit", tab:"vols", t:`${o.nom} : 2 vols d'éval avec ${t}`, s:`Interdit : même TRI les ${u.map(frDate).join(", ")}. Un des deux vols doit être refait avec un autre TRI.`});
+    });
+  });
   trainees().filter(t=>t.lache && t.lache>=addDays(TODAY_ISO,-7)).forEach(t=>
     A.push({k:"info", tab:"vols", t:`${t.nom} lâché le ${frDate(t.lache)}`, s:"Penser à clôturer son dossier de formation"}));
   const order = {crit:0,warn:1,info:2};
@@ -355,7 +367,7 @@ function vEvals(){
   E.sort((a,b)=>order(a)-order(b) || (a.ordre-b.ordre));
   const load = triLoad();
   return `
-  <div class="note">${esc((st.ref.tri&&st.ref.tri.regle)||"")} Un TRI qui a déjà évalué l'OPL est barré automatiquement dès que tu marques le vol fait.</div>
+  <div class="item crit"><div class="txt"><b>Règle : aucun OPL ne fait deux vols d'évaluation avec le même TRI.</b><div class="sub">Le tableau ne propose jamais un TRI qui a déjà évalué l'OPL, et signale dans « Aujourd'hui » tout doublon trouvé dans un export TrainerU.</div></div></div>
   <section class="grid2">${E.map(oplCard).join("")}</section>
   <section class="card">
     <h2 style="margin:0">Charge des TRI évaluateurs</h2>

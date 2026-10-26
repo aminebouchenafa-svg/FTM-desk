@@ -21,4 +21,6 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 4. Signaler à l'utilisateur les cas ambigus.
 
 ## Règle métier
-Pour un même OPL, chaque vol d'évaluation est fait par un TRI différent.
+Aucun pilote ne fait deux vols d'évaluation avec le même TRI (règle confirmée par le FTM).
+Des vols du même TRI sur des jours consécutifs = une seule rotation, donc une seule éval.
+Un même TRI sur des jours non consécutifs pour un même OPL = infraction à signaler.
