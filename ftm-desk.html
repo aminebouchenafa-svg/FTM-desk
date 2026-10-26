@@ -1,0 +1,488 @@
+<title>FTM Desk 737</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky header + tab strip, one column of operational cards; state shown by side stripes and pills */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#13203A; --muted:#5D6A80; --line:#DCE2EB;
+  --accent:#1E58B4; --accent-soft:#E3ECFA;
+  --crit:#C42B2B; --crit-soft:#FBE7E6; --warn:#B26A00; --warn-soft:#FDF1DC; --ok:#1E7A46; --ok-soft:#E2F3E8;
+  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1420; --surface:#162032; --ink:#E6ECF5; --muted:#93A1B8; --line:#26324A;
+  --accent:#7FA9F0; --accent-soft:#1C2B47;
+  --crit:#F07A72; --crit-soft:#3A1D20; --warn:#F0B65A; --warn-soft:#352A16; --ok:#6BCB8E; --ok-soft:#173022; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1420; --surface:#162032; --ink:#E6ECF5; --muted:#93A1B8; --line:#26324A;
+  --accent:#7FA9F0; --accent-soft:#1C2B47;
+  --crit:#F07A72; --crit-soft:#3A1D20; --warn:#F0B65A; --warn-soft:#352A16; --ok:#6BCB8E; --ok-soft:#173022; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:12px 6px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:1.5rem;letter-spacing:.01em;margin:0}
+h1 small{font-weight:500;color:var(--muted);font-size:.95rem;margin-left:6px}
+.date{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);font:600 .95rem var(--display);letter-spacing:.03em;text-transform:uppercase;padding:7px 12px;border-radius:8px;cursor:pointer}
+nav button[aria-current="true"]{background:var(--accent-soft);color:var(--accent)}
+nav .n{font-family:var(--mono);font-size:.72rem;margin-left:4px;padding:1px 5px;border-radius:6px;background:var(--crit);color:var(--surface)}
+main{padding-block:16px 48px;display:grid;gap:18px}
+h2{font-family:var(--display);font-weight:600;font-size:1.05rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:6px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;color:inherit;font:inherit}
+.kpi b{display:block;font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.85rem;color:var(--muted)}
+.kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)} .kpi.ok b{color:var(--ok)}
+.list{display:grid;gap:8px}
+.item{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
+.item.crit{border-left-color:var(--crit)} .item.warn{border-left-color:var(--warn)} .item.info{border-left-color:var(--accent)} .item.ok{border-left-color:var(--ok)}
+.item .txt{flex:1;min-width:0}
+.item .sub{color:var(--muted);font-size:.85rem}
+.pill{display:inline-block;font:600 .72rem var(--body);letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.info{background:var(--accent-soft);color:var(--accent)} .pill.mute{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.card.crit{border-left:4px solid var(--crit)} .card.warn{border-left:4px solid var(--warn)} .card.done{opacity:.7}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.name{font-weight:700;font-size:1.02rem}
+.mono{font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:.82rem;padding:3px 9px;border-radius:6px;border:1px solid var(--line);background:var(--bg)}
+.chip.free{border-color:var(--ok);color:var(--ok);background:var(--ok-soft);cursor:pointer}
+.chip.free.sug{box-shadow:inset 0 0 0 1px var(--ok);font-weight:700}
+.chip.no{text-decoration:line-through;color:var(--muted)}
+.chip.pend{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.big{font-family:var(--display);font-weight:700;font-size:1.7rem;line-height:1;font-variant-numeric:tabular-nums}
+.prog{display:grid;gap:6px}
+.prog .p{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.9rem;padding:6px 8px;border-radius:6px;background:var(--bg)}
+button.b{font:600 .85rem var(--body);border-radius:7px;padding:6px 11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.b.pri{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button.b.okb{border-color:var(--ok);color:var(--ok)}
+button.b.sm{padding:3px 8px;font-size:.78rem}
+button:focus-visible,select:focus-visible,input:focus-visible,.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input[type=text],input[type=date],input[type=search]{font:inherit;font-size:.92rem;padding:6px 8px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0}
+input[type=search]{width:100%}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px;border-radius:8px;background:var(--accent-soft)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--muted);font:600 .85rem var(--body);padding:6px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.day{display:grid;gap:6px}
+.dayh{font-family:var(--display);font-weight:600;font-size:1rem;display:flex;gap:8px;align-items:baseline}
+.dayh.today{color:var(--accent)}
+.slot{display:grid;grid-template-columns:62px 1fr;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:8px 10px}
+.slot.empty{border-left-color:var(--crit)} .slot.mine{border-left-color:var(--accent);background:var(--accent-soft)}
+.slot .t{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.slot .t b{display:block;color:var(--ink);font-weight:500}
+.slot .w{min-width:0}
+.slot .ins{font-weight:700}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:600 .75rem var(--body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.note{font-size:.82rem;color:var(--muted)}
+.empty-state{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:24px;text-align:center;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:.9rem;z-index:20;max-width:calc(100% - 32px)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.grid2>*{min-width:0}
+@media (prefers-reduced-motion:no-preference){.item,.card{transition:opacity .2s}}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="top">
+      <h1>FTM Desk<small>B737 NG/MAX</small></h1>
+      <span class="date" id="today"></span>
+    </div>
+    <nav id="tabs" aria-label="Sections">
+      <button data-t="today">Aujourd'hui</button>
+      <button data-t="evals">Évals OPL</button>
+      <button data-t="simu">Simu</button>
+      <button data-t="licences">Licences</button>
+      <button data-t="equipes">Équipes</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="view">
+  <div class="empty-state">Chargement de tes données FTM : OPL en évaluation, planning simu, licences, équipes…</div>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const ME = "BOUCHENAFA";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+const TODAY_ISO = iso(TODAY);
+const addDays = (s,n) => { const d = new Date(s+"T00:00:00"); d.setDate(d.getDate()+n); return iso(d); };
+const frDate = s => { if(!s) return ""; const [y,m,d] = s.split("-"); return d+"/"+m+"/"+y; };
+const frToIso = s => { const m = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(s||""); return m ? m[3]+"-"+m[2]+"-"+m[1] : ""; };
+const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const MOIS = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const dayLabel = s => { const d = new Date(s+"T00:00:00"); return JOURS[d.getDay()]+" "+d.getDate()+" "+MOIS[d.getMonth()]; };
+$("#today").textContent = dayLabel(TODAY_ISO) + " " + TODAY.getFullYear();
+
+const st = { opl:{}, ref:{}, simu:{}, taches:{}, loaded:{opl:false,ref:false,simu:false,taches:false}, db:null, canWrite:true };
+const ui = { tab:"today", simuMonth:null, simuFilter:"all", showPipeline:false, form:{}, licQ:"", eqQ:"", licFilter:"todo" };
+try { const t = localStorage.getItem("ftm.tab"); if (t) ui.tab = t; } catch(e) {}
+const hashTab = (location.hash||"").slice(1);
+if (["today","evals","simu","licences","equipes"].includes(hashTab)) ui.tab = hashTab;
+
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(()=>t.hidden = true, 2600); }
+
+async function write(path, data, okMsg){
+  if (!st.db) { toast("Base de données indisponible : la modification n'est pas enregistrée."); return; }
+  try { await st.db.doc(path).update(data); if (okMsg) toast(okMsg); }
+  catch(e){ toast(e && e.code === "invalid_argument" ? "Tu n'as pas les droits pour modifier ce tableau." : "Échec de l'enregistrement, réessaie."); }
+}
+
+/* ---------- derived data ---------- */
+const TRI = () => (st.ref.tri && st.ref.tri.evaluateurs) || [];
+const oplList = () => Object.values(st.opl).sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+const pending = o => (o.programmes||[]).filter(p=>p.statut==="programmé");
+const aPlanifier = o => Math.max(0,(o.evalsRestantes||0) - pending(o).length);
+const inEval = o => typeof o.evalsRestantes === "number";
+function triLoad(){
+  const L = {}; TRI().forEach(t=>L[t]=0);
+  oplList().forEach(o=>pending(o).forEach(p=>{ L[p.tri]=(L[p.tri]||0)+1; }));
+  return L;
+}
+function triDispo(o){
+  const no = new Set([...(o.exclus||[]), ...pending(o).map(p=>p.tri)].map(s=>s.toLowerCase()));
+  const L = triLoad();
+  return TRI().filter(t=>!no.has(t.toLowerCase())).sort((a,b)=>(L[a]-L[b]) || a.localeCompare(b));
+}
+function oplLevel(o){
+  if (!inEval(o)) return "";
+  if ((o.evalsRestantes||0) === 0) return "done";
+  if (aPlanifier(o) === 0) return "";
+  if (o.echeance && o.echeance < TODAY_ISO) return "crit";
+  if (o.echeance && o.echeance <= addDays(TODAY_ISO,7)) return "warn";
+  return "";
+}
+function allSlots(){
+  const out = [];
+  Object.values(st.simu).forEach(m => (m.jours||[]).forEach((j,ji) => (j.slots||[]).forEach((s,si) => out.push({mois:m.mois, ji, si, date:j.date, ...s}))));
+  return out.sort((a,b)=> a.date.localeCompare(b.date) || a.s-b.s);
+}
+const isMine = s => (s.instr||"").toUpperCase().includes(ME);
+const isEmptySlot = s => !String(s.instr||"").replace(/^(TRI|TRE)\s*[:;]?\s*$/i,"").trim() && (s.crew||"").trim();
+function licStatus(r){
+  if (r.fait) return {k:"ok", t:"Renouvelée"};
+  if (!r.validite) return {k:"warn", t:"Date manquante"};
+  const d = frToIso(r.validite);
+  if (d < TODAY_ISO) return {k:"crit", t:"Échue"};
+  if (d <= addDays(TODAY_ISO,30)) return {k:"warn", t:"< 30 j"};
+  return {k:"ok", t:"Valide"};
+}
+const lics = () => (st.ref.licences && st.ref.licences.rows) || [];
+const taches = () => Object.entries(st.taches).map(([id,t])=>({id,...t}));
+
+function alerts(){
+  const A = [];
+  oplList().forEach(o=>{
+    const lv = oplLevel(o), n = aPlanifier(o);
+    if (lv==="crit") A.push({k:"crit", tab:"evals", t:`${o.nom} : ${n} vol${n>1?"s":""} d'éval à programmer`, s:`Échéance ${frDate(o.echeance)} dépassée`});
+    else if (lv==="warn") A.push({k:"warn", tab:"evals", t:`${o.nom} : ${n} vol${n>1?"s":""} d'éval à programmer`, s:`Échéance ${frDate(o.echeance)}`});
+    pending(o).forEach(p=>{ if (p.date && p.date < TODAY_ISO) A.push({k:"warn", tab:"evals", t:`${o.nom} : éval avec ${p.tri} du ${frDate(p.date)}`, s:"Date passée : marque-la faite ou reprogramme"}); });
+    ["checkLocal","checkNav"].forEach(f=>{
+      const m = /Prévu le (\d\d)\/(\d\d)/.exec(o[f]||"");
+      if (m && "2026-"+m[2]+"-"+m[1] < TODAY_ISO) A.push({k:"warn", tab:"evals", t:`${o.nom} : ${f==="checkLocal"?"check local":"check nav"} ${o[f].toLowerCase()}`, s:"Résultat à mettre à jour"});
+    });
+  });
+  const horizon = addDays(TODAY_ISO,14);
+  allSlots().filter(s=>s.date>=TODAY_ISO && s.date<=horizon && isEmptySlot(s)).forEach(s=>
+    A.push({k: s.date<=addDays(TODAY_ISO,3)?"crit":"warn", tab:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
+  const nl = lics().filter(r=>licStatus(r).k==="crit").length;
+  if (nl) A.push({k:"warn", tab:"licences", t:`${nl} licences échues à faire renouveler`, s:"Selon l'état de suivi du 30/08/2026"});
+  const order = {crit:0,warn:1,info:2};
+  return A.sort((a,b)=>order[a.k]-order[b.k]);
+}
+
+/* ---------- views ---------- */
+function vToday(){
+  const A = alerts();
+  const evRest = oplList().filter(inEval).reduce((n,o)=>n+aPlanifier(o),0);
+  const late = oplList().filter(o=>oplLevel(o)==="crit").length;
+  const holes = allSlots().filter(s=>s.date>=TODAY_ISO && s.date<=addDays(TODAY_ISO,14) && isEmptySlot(s)).length;
+  const mine = allSlots().filter(s=>s.date>=TODAY_ISO && s.date<=addDays(TODAY_ISO,7) && isMine(s));
+  const lic = lics().filter(r=>licStatus(r).k==="crit").length;
+  const T = taches().sort((a,b)=>(a.fait-b.fait)||String(a.echeance||"9").localeCompare(String(b.echeance||"9")));
+  return `
+  <div class="kpis">
+    <button class="kpi ${late?"crit":"ok"}" data-go="evals"><b>${evRest}</b><span>vols d'éval à programmer${late?` · ${late} OPL en retard`:""}</span></button>
+    <button class="kpi ${holes?"crit":"ok"}" data-go="simu"><b>${holes}</b><span>séances simu sans TRI (14 j)</span></button>
+    <button class="kpi ${mine.length?"":"ok"}" data-go="simu"><b>${mine.length}</b><span>mes séances simu (7 j)</span></button>
+    <button class="kpi ${lic?"warn":"ok"}" data-go="licences"><b>${lic}</b><span>licences échues</span></button>
+  </div>
+  <section class="list">
+    <h2>À traiter en priorité</h2>
+    ${A.length ? A.slice(0,14).map(a=>`<div class="item ${a.k}"><div class="txt"><div>${esc(a.t)}</div><div class="sub">${esc(a.s)}</div></div><button class="b sm" data-go="${a.tab}">Ouvrir</button></div>`).join("")
+      + (A.length>14?`<div class="note">+ ${A.length-14} autres points dans les onglets.</div>`:"")
+      : `<div class="item ok"><div class="txt">Rien d'urgent. Profite-en pour planifier le mois prochain.</div></div>`}
+  </section>
+  ${mine.length?`<section class="list"><h2>Mes séances simu</h2>${mine.map(s=>`<div class="item info"><div class="txt"><div><b>${dayLabel(s.date)}</b> · <span class="mono">S${s.s} ${s.h}</span></div><div class="sub">${esc(s.crew||"—")}</div></div></div>`).join("")}</section>`:""}
+  <section class="list">
+    <h2>Mes tâches</h2>
+    <form class="form" id="fTask">
+      <input type="text" id="taskTxt" placeholder="Ex. : appeler le planning pour Chemmi" style="flex:1 1 200px" required>
+      <input type="date" id="taskDate" aria-label="Échéance">
+      <button class="b pri" type="submit">Ajouter</button>
+    </form>
+    ${T.length ? T.map(t=>{
+      const k = t.fait?"ok":(t.echeance && t.echeance<TODAY_ISO?"crit":(t.echeance && t.echeance<=addDays(TODAY_ISO,3)?"warn":"info"));
+      return `<div class="item ${k}"><input type="checkbox" data-task="${t.id}" ${t.fait?"checked":""} aria-label="Fait"><div class="txt"><div style="${t.fait?"text-decoration:line-through;color:var(--muted)":""}">${esc(t.texte)}</div>${t.echeance?`<div class="sub">Pour le ${frDate(t.echeance)}</div>`:""}</div><button class="b sm" data-deltask="${t.id}" aria-label="Supprimer">✕</button></div>`;}).join("")
+      : `<div class="note">Note ici tout ce qui te passe par la tête (appels, mails, relances) pour libérer ta mémoire.</div>`}
+  </section>`;
+}
+
+function oplCard(o){
+  const lv = oplLevel(o), n = aPlanifier(o), P = o.programmes||[];
+  const dispo = triDispo(o), sug = dispo.slice(0, Math.min(n,3));
+  const f = ui.form[o.matricule];
+  const prio = o.priorite==="prio" ? `<span class="pill ${lv==="crit"?"crit":"warn"}">Prioritaire · ${frDate(o.echeance)}</span>` : o.priorite==="mois" ? `<span class="pill mute">Ce mois · ${frDate(o.echeance)}</span>` : "";
+  const done = (o.evalsRestantes||0)===0;
+  return `<article class="card ${done?"done":lv}">
+    <div class="row spread">
+      <div><div class="name">${esc(o.nom)}</div><div class="mono">Mat. ${esc(o.matricule)}</div></div>
+      <div class="row">${done?`<span class="pill ok">Évals terminées</span>`:prio}</div>
+    </div>
+    <div class="row" style="gap:18px">
+      <div><div class="big">${o.evalsRestantes||0}</div><div class="note">vols restants</div></div>
+      <div><div class="big" style="color:${n?"var(--crit)":"var(--ok)"}">${n}</div><div class="note">à programmer</div></div>
+      <div><div class="big" style="color:var(--accent)">${pending(o).length}</div><div class="note">programmés</div></div>
+    </div>
+    ${done?"":`<div><div class="note" style="margin-bottom:4px">TRI disponibles ${n?"(les suggérés en gras ont le moins de vols prévus)":""}</div>
+      <div class="chips">${dispo.map(t=>`<button class="chip free ${sug.includes(t)&&n?"sug":""}" data-pick="${o.matricule}" data-tri="${esc(t)}">${esc(t)}</button>`).join("") || `<span class="note" style="color:var(--crit)">Plus aucun TRI disponible : ajoute un évaluateur.</span>`}
+      ${(o.exclus||[]).map(t=>`<span class="chip no" title="A déjà évalué cet OPL">${esc(t)}</span>`).join("")}</div></div>`}
+    ${f?`<form class="form" data-prog="${o.matricule}">
+        <select id="tri-${o.matricule}" aria-label="TRI">${dispo.map(t=>`<option ${t===f.tri?"selected":""}>${esc(t)}</option>`).join("")}</select>
+        <input type="date" id="date-${o.matricule}" value="${f.date||""}" aria-label="Date du vol">
+        <button class="b pri" type="submit">Programmer</button>
+        <button class="b" type="button" data-cancelform="${o.matricule}">Annuler</button>
+      </form>`:""}
+    ${P.length?`<div class="prog">${P.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(p=>`<div class="p">
+        <span class="pill ${p.statut==="fait"?"ok":(p.date&&p.date<TODAY_ISO?"warn":"info")}">${p.statut==="fait"?"Fait":"Programmé"}</span>
+        <span class="mono">${p.date?frDate(p.date):"date ?"}</span><b>${esc(p.tri)}</b>
+        <span style="flex:1"></span>
+        ${p.statut==="programmé"?`<button class="b sm okb" data-done="${o.matricule}" data-pid="${p.id}">Vol fait</button><button class="b sm" data-del="${o.matricule}" data-pid="${p.id}">Annuler</button>`:""}
+      </div>`).join("")}</div>`:""}
+    ${done||f?"":`<div class="row"><button class="b pri" data-open="${o.matricule}" ${dispo.length?"":"disabled"}>Programmer un vol</button></div>`}
+  </article>`;
+}
+const STATUTS = ["En attente","Prévu","Validé","Instruction PL"];
+function vEvals(){
+  const L = oplList(), E = L.filter(inEval), Pi = L.filter(o=>!inEval(o));
+  const order = o => ({crit:0,warn:1,"":2,done:3})[oplLevel(o)];
+  E.sort((a,b)=>order(a)-order(b) || (a.ordre-b.ordre));
+  const load = triLoad();
+  return `
+  <div class="note">${esc((st.ref.tri&&st.ref.tri.regle)||"")} Un TRI qui a déjà évalué l'OPL est barré automatiquement dès que tu marques le vol fait.</div>
+  <section class="grid2">${E.map(oplCard).join("")}</section>
+  <section class="card">
+    <h2 style="margin:0">Charge des TRI évaluateurs</h2>
+    <div class="chips">${TRI().map(t=>`<span class="chip ${load[t]?"pend":""}">${esc(t)} · ${load[t]||0}</span>`).join("")}</div>
+    <div class="note">Nombre de vols d'éval programmés et pas encore faits.</div>
+  </section>
+  <section class="list">
+    <div class="row spread"><h2>OPL en checks / instruction (${Pi.length})</h2><button class="b sm" id="togPipe">${ui.showPipeline?"Masquer":"Afficher"}</button></div>
+    ${ui.showPipeline?`<div class="tbl"><table><thead><tr><th>OPL</th><th>Check local</th><th>Check nav</th><th></th></tr></thead><tbody>
+      ${Pi.map(o=>`<tr><td><b>${esc(o.nom)}</b><div class="mono">${esc(o.matricule)}</div></td>
+        <td>${selStat(o,"checkLocal")}</td><td>${selStat(o,"checkNav")}</td>
+        <td><button class="b sm" data-toeval="${o.matricule}" ${(o.checkLocal==="Validé"&&o.checkNav==="Validé")?"":"disabled"} title="Les deux checks doivent être validés">Passer en évals</button></td></tr>`).join("")}
+    </tbody></table></div><div class="note">Source : Suivi OPL/PL NG du 30/08/2026. Quand les deux checks sont validés, « Passer en évals » ouvre 5 vols d'évaluation.</div>`:""}
+  </section>`;
+}
+function selStat(o,f){
+  const v = o[f]||"";
+  const opts = STATUTS.includes(v)?STATUTS:[v,...STATUTS];
+  const k = v==="Validé"?"ok":(/Prévu/.test(v)?"info":(v==="Instruction PL"?"mute":"warn"));
+  return `<select data-stat="${o.matricule}" data-f="${f}" aria-label="${f}" style="border-color:var(--${k==="mute"?"line":k})">${opts.map(s=>`<option ${s===v?"selected":""}>${esc(s)}</option>`).join("")}</select>`;
+}
+
+function vSimu(){
+  const months = Object.keys(st.simu).sort();
+  if (!months.length) return `<div class="empty-state">Aucun planning simu chargé.</div>`;
+  if (!ui.simuMonth || !st.simu[ui.simuMonth]) ui.simuMonth = months.find(m=>TODAY_ISO.startsWith(m)) || months[months.length-1];
+  const M = st.simu[ui.simuMonth];
+  const slots = allSlots().filter(s=>s.mois===ui.simuMonth).filter(s=> ui.simuFilter==="all" || (ui.simuFilter==="empty"?isEmptySlot(s):isMine(s)));
+  const byDay = {}; slots.forEach(s=>(byDay[s.date]=byDay[s.date]||[]).push(s));
+  const nEmpty = allSlots().filter(s=>s.mois===ui.simuMonth && isEmptySlot(s)).length;
+  const MN = m => { const [y,mm]=m.split("-"); return MOIS[+mm-1]+" "+y; };
+  return `
+  <div class="row spread">
+    <div class="seg" role="group" aria-label="Mois">${months.map(m=>`<button data-month="${m}" aria-pressed="${m===ui.simuMonth}">${MN(m)}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Filtre">
+      <button data-sf="all" aria-pressed="${ui.simuFilter==="all"}">Tout</button>
+      <button data-sf="empty" aria-pressed="${ui.simuFilter==="empty"}">Sans TRI (${nEmpty})</button>
+      <button data-sf="mine" aria-pressed="${ui.simuFilter==="mine"}">Mes séances</button>
+    </div>
+  </div>
+  <div class="note">Créneaux : S1 06:00 · S2 10:15 · S3 14:30 · S4 18:45 · S5 23:00. Touche un nom de TRI pour le modifier. Source : ${esc(M.source||"")}.</div>
+  ${Object.keys(byDay).length? Object.entries(byDay).map(([d,S])=>`<section class="day">
+    <div class="dayh ${d===TODAY_ISO?"today":""}">${dayLabel(d)} ${d===TODAY_ISO?`<span class="pill info">Aujourd'hui</span>`:""}</div>
+    ${S.map(s=>{ const key=s.mois+"|"+s.ji+"|"+s.si, ed = ui.form["slot"]===key;
+      return `<div class="slot ${isEmptySlot(s)?"empty":(isMine(s)?"mine":"")}">
+        <div class="t"><b>S${s.s}</b>${s.h}</div>
+        <div class="w">${ed?`<form class="row" data-slotform="${key}"><input type="text" id="slotin" value="${esc(s.instr)}" placeholder="Nom du TRI" style="flex:1"><button class="b sm pri" type="submit">OK</button></form>`
+          :`<button class="ins b sm" data-slot="${key}" style="border:0;padding:0;background:none;${isEmptySlot(s)?"color:var(--crit)":""}">${isEmptySlot(s)?"TRI à trouver":esc(s.instr)}</button>`}
+        <div class="sub note">${esc(s.crew||"—")}</div></div></div>`;}).join("")}
+  </section>`).join("") : `<div class="empty-state">Aucune séance pour ce filtre.</div>`}`;
+}
+
+function vLicences(){
+  const R = lics().map((r,i)=>({...r,i,st:licStatus(r)}));
+  const q = ui.licQ.trim().toLowerCase();
+  const F = R.filter(r=>!q || r.nom.toLowerCase().includes(q) || String(r.num).includes(q) || (r.licence||"").toLowerCase().includes(q))
+    .filter(r=> ui.licFilter==="all" || (ui.licFilter==="todo" ? r.st.k!=="ok" : r.st.k==="ok"))
+    .sort((a,b)=>({crit:0,warn:1,ok:2})[a.st.k]-({crit:0,warn:1,ok:2})[b.st.k] || (frToIso(a.validite)||"9").localeCompare(frToIso(b.validite)||"9"));
+  const c = k => R.filter(r=>r.st.k===k).length;
+  return `
+  <div class="kpis">
+    <div class="kpi crit"><b>${c("crit")}</b><span>échues</span></div>
+    <div class="kpi warn"><b>${c("warn")}</b><span>date manquante ou &lt; 30 j</span></div>
+    <div class="kpi ok"><b>${c("ok")}</b><span>renouvelées / valides</span></div>
+  </div>
+  <div class="row"><input type="search" id="licQ" placeholder="Chercher un nom, un n° de licence…" value="${esc(ui.licQ)}"></div>
+  <div class="seg" role="group" aria-label="Filtre">
+    <button data-lf="todo" aria-pressed="${ui.licFilter==="todo"}">À traiter</button>
+    <button data-lf="done" aria-pressed="${ui.licFilter==="done"}">OK</button>
+    <button data-lf="all" aria-pressed="${ui.licFilter==="all"}">Toutes</button>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Pilote</th><th>Licence</th><th>Validité</th><th>État</th><th></th></tr></thead><tbody>
+  ${F.map(r=>`<tr><td><b>${esc(r.nom)}</b><div class="mono">N° ${r.num}</div></td><td class="num">${esc(r.licence||"—")}</td><td class="num">${esc(r.validite||"—")}</td>
+    <td><span class="pill ${r.st.k}">${r.st.t}</span></td>
+    <td><button class="b sm ${r.fait?"":"okb"}" data-lic="${r.i}">${r.fait?"Annuler":"Renouvelée"}</button></td></tr>`).join("") || `<tr><td colspan="5" class="note">Aucune licence dans ce filtre.</td></tr>`}
+  </tbody></table></div>
+  <div class="note">${esc((st.ref.licences&&st.ref.licences.source)||"")}. Marque « Renouvelée » quand le dossier est fait ; je mettrai les dates à jour avec le prochain état que tu m'envoies.</div>`;
+}
+
+function vEquipes(){
+  const E = st.ref.equipes || {safety:[],candidatsTRI:[]};
+  const q = ui.eqQ.trim().toLowerCase();
+  const inOpl = new Set(Object.keys(st.opl));
+  const S = (E.safety||[]).filter(p=>!q || p.nom.toLowerCase().includes(q) || p.mat.includes(q));
+  const CS = ["Retenu","En formation","Qualifié TRI"];
+  return `
+  <section class="card">
+    <div class="row spread"><h2 style="margin:0">Candidats TRI · collège du 28/09/2026</h2><span class="pill info">${(E.candidatsTRI||[]).length} CDB</span></div>
+    <div class="tbl" style="border:0"><table><thead><tr><th>Rang</th><th>Commandant de bord</th><th>Statut</th></tr></thead><tbody>
+    ${(E.candidatsTRI||[]).map((c,i)=>`<tr><td class="num">${c.rang}</td><td>${esc(c.nom)}</td><td><select data-cand="${i}" aria-label="Statut">${CS.map(s=>`<option ${s===c.statut?"selected":""}>${s}</option>`).join("")}</select></td></tr>`).join("")}
+    </tbody></table></div>
+  </section>
+  <section class="list">
+    <h2>Safety pilots FO B737NG (${(E.safety||[]).length})</h2>
+    <input type="search" id="eqQ" placeholder="Chercher un nom ou un matricule…" value="${esc(ui.eqQ)}">
+    <div class="tbl"><table><thead><tr><th>Matricule</th><th>Nom</th><th>Suivi OPL</th></tr></thead><tbody>
+    ${S.map(p=>{ const o = st.opl[p.mat]; let tag="";
+      if (o) tag = inEval(o) ? ((o.evalsRestantes||0)?`<span class="pill warn">${o.evalsRestantes} éval${o.evalsRestantes>1?"s":""}</span>`:`<span class="pill ok">Évals OK</span>`) : `<span class="pill mute">Checks</span>`;
+      return `<tr><td class="num">${esc(p.mat)}</td><td>${esc(p.nom)}</td><td>${tag}</td></tr>`;}).join("")}
+    </tbody></table></div>
+  </section>`;
+}
+
+/* ---------- render & events ---------- */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>{
+    b.setAttribute("aria-current", b.dataset.t===ui.tab);
+    b.querySelector(".n")?.remove();
+  });
+  const all = Object.values(st.loaded).every(Boolean);
+  if (all) {
+    const nc = alerts().filter(a=>a.k==="crit").length;
+    if (nc) { const s = document.createElement("span"); s.className="n"; s.textContent=nc; document.querySelector('#tabs [data-t="today"]').appendChild(s); }
+  }
+  if (!st.db && st.dbFailed) { $("#view").innerHTML = `<div class="empty-state">Ouvre cette page depuis claude.ai en étant connecté pour voir et modifier tes données.</div>`; return; }
+  if (!all) return;
+  const focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
+  $("#view").innerHTML = ({today:vToday, evals:vEvals, simu:vSimu, licences:vLicences, equipes:vEquipes}[ui.tab]||vToday)();
+  if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos);}catch(e){} } }
+}
+function go(t){ ui.tab=t; try{localStorage.setItem("ftm.tab",t);}catch(e){} render(); window.scrollTo(0,0); }
+$("#tabs").addEventListener("click", e=>{ const b=e.target.closest("button[data-t]"); if(b) go(b.dataset.t); });
+
+const V = $("#view");
+V.addEventListener("click", async e=>{
+  const t = e.target.closest("button, .chip"); if (!t) return;
+  const d = t.dataset;
+  if (d.go) return go(d.go);
+  if (d.open || d.pick) { const m = d.open||d.pick, o = st.opl[m]; ui.form[m] = {tri: d.tri || triDispo(o)[0], date: (ui.form[m]&&ui.form[m].date)||""}; return render(); }
+  if (d.cancelform) { delete ui.form[d.cancelform]; return render(); }
+  if (d.done || d.del) {
+    const m = d.done||d.del, o = st.opl[m]; let P = (o.programmes||[]).map(p=>({...p}));
+    const p = P.find(x=>x.id===d.pid); if (!p) return;
+    if (d.del) { P = P.filter(x=>x.id!==d.pid); return write("opl/"+m, {programmes:P}, "Vol retiré"); }
+    p.statut = "fait";
+    const ex = [...(o.exclus||[])]; if (!ex.some(x=>x.toLowerCase()===p.tri.toLowerCase())) ex.push(p.tri);
+    return write("opl/"+m, {programmes:P, exclus:ex, evalsRestantes:Math.max(0,(o.evalsRestantes||0)-1)}, "Vol d'éval enregistré");
+  }
+  if (t.id==="togPipe") { ui.showPipeline=!ui.showPipeline; return render(); }
+  if (d.toeval) return write("opl/"+d.toeval, {evalsRestantes:5, priorite:"mois", echeance:addDays(TODAY_ISO,30)}, "OPL passé en évaluations");
+  if (d.month) { ui.simuMonth=d.month; return render(); }
+  if (d.sf) { ui.simuFilter=d.sf; return render(); }
+  if (d.lf) { ui.licFilter=d.lf; return render(); }
+  if (d.slot) { ui.form.slot=d.slot; render(); document.getElementById("slotin")?.focus(); return; }
+  if (d.lic) { const R = lics().map(r=>({...r})); R[+d.lic].fait=!R[+d.lic].fait; return write("ref/licences", {rows:R}, R[+d.lic].fait?"Licence marquée renouvelée":"Modification annulée"); }
+  if (d.deltask) { try { await st.db.doc("taches/"+d.deltask).delete(); } catch(err){ toast("Suppression impossible."); } return; }
+});
+V.addEventListener("change", e=>{
+  const t = e.target, d = t.dataset;
+  if (t.id && t.id.startsWith("tri-")) { ui.form[t.id.slice(4)].tri = t.value; }
+  if (t.id && t.id.startsWith("date-")) { ui.form[t.id.slice(5)].date = t.value; }
+  if (d.stat) write("opl/"+d.stat, {[d.f]:t.value}, "Statut mis à jour");
+  if (d.task) write("taches/"+d.task, {fait:t.checked});
+  if (d.cand!=null && d.cand!=="") { const C=(st.ref.equipes.candidatsTRI||[]).map(c=>({...c})); C[+d.cand].statut=t.value; write("ref/equipes",{candidatsTRI:C},"Statut mis à jour"); }
+});
+V.addEventListener("input", e=>{
+  if (e.target.id==="licQ") { ui.licQ=e.target.value; render(); }
+  if (e.target.id==="eqQ") { ui.eqQ=e.target.value; render(); }
+});
+V.addEventListener("submit", async e=>{
+  e.preventDefault(); const f = e.target;
+  if (f.id==="fTask") {
+    const txt = $("#taskTxt").value.trim(); if (!txt || !st.db) return;
+    try { await st.db.collection("taches").add({texte:txt, echeance:$("#taskDate").value||"", fait:false, cree:TODAY_ISO}); toast("Tâche ajoutée"); }
+    catch(err){ toast("Échec de l'enregistrement, réessaie."); }
+    return;
+  }
+  if (f.dataset.prog) {
+    const m = f.dataset.prog, o = st.opl[m];
+    const tri = document.getElementById("tri-"+m).value, date = document.getElementById("date-"+m).value;
+    if (!tri) return;
+    const P = [...(o.programmes||[]), {id:"p"+Date.now().toString(36), tri, date, statut:"programmé"}];
+    delete ui.form[m];
+    return write("opl/"+m, {programmes:P}, `Vol avec ${tri} programmé`);
+  }
+  if (f.dataset.slotform) {
+    const [mois, ji, si] = f.dataset.slotform.split("|"), val = $("#slotin").value.trim();
+    const J = JSON.parse(JSON.stringify(st.simu[mois].jours)); J[+ji].slots[+si].instr = val;
+    delete ui.form.slot;
+    return write("simu/"+mois, {jours:J}, "Séance mise à jour");
+  }
+});
+
+render();
+(async function boot(){
+  const db = window.claude && await window.claude.use("db");
+  if (!db) { st.dbFailed = true; return render(); }
+  st.db = db;
+  const sub = (name, fn) => db.collection(name).onSnapshot(s=>{ fn(s); st.loaded[name]=true; render(); }, ()=>{ st.loaded[name]=true; render(); });
+  sub("opl", s=>{ st.opl={}; s.docs.forEach(d=>st.opl[d.id]=d.data()); });
+  sub("ref", s=>{ st.ref={}; s.docs.forEach(d=>st.ref[d.id]=d.data()); });
+  sub("simu", s=>{ st.simu={}; s.docs.forEach(d=>st.simu[d.id]=d.data()); });
+  sub("taches", s=>{ st.taches={}; s.docs.forEach(d=>st.taches[d.id]=d.data()); });
+})();
+})();
+</script>
