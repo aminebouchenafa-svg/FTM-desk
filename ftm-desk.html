@@ -498,7 +498,9 @@ function pilotStatus(p, I){
   if (I.instr && !I.instr.lache) { const L = legsOf(I.instr); return {t:`INSTR LIGNE ${L}/${r.legsLacher}`, c: L>=r.legsAlerte?"c-red":(L>=r.legsAlerte-6?"c-amb":"c-mag"), phase:"instr"}; }
   if (I.init && (I.init.heures||0) < r.initHeures) return {t:`AB INITIO ${I.init.heures||0}H`, c:"c-amb", phase:"init"};
   if (I.opl && inEval(I.opl) && (I.opl.evalsRestantes||0)>0) return {t:`${(I.opl.groupe||"OPL")==="CDB"?"EVAL CDB":(I.opl.groupe==="CIBLE"?"CIBLÉ":"EVAL")} ${faits(I.opl)}/${I.opl.total||r.evalsStd}`, c: evLevel(I.opl)==="crit"?"c-red":"c-mag", phase:"eval"};
-  if (I.opl && !inEval(I.opl)) return I.opl.checkLocal==="Instruction PL" ? {t:"INSTR PL", c:"c-mag", phase:"pl"} : {t:"CHECKS NAV/LOC", c:"c-mag", phase:"checks"};
+  if (I.opl && !inEval(I.opl)) { if (I.opl.checkLocal==="Instruction PL") return {t:"INSTR PL", c:"c-mag", phase:"pl"};
+    const pl = chkPending(I.opl.checkLocal), pn = chkPending(I.opl.checkNav);
+    return {t: pl&&pn?"CHECK LOCAL + NAV":pl?"CHECK LOCAL":pn?"CHECK NAV":"CHECKS VALIDÉS", c: pl||pn?"c-mag":"c-grn", phase:"checks"}; }
   if (I.max && !I.max.licenceOk) return {t:"FORMATION MAX", c:"c-cyn", phase:"max"};
   return {t: I.tri?"TRI":"EN LIGNE", c: I.tri?"c-cyn":"c-grn", phase:"ligne"};
 }
@@ -512,8 +514,12 @@ async function assign(p, what){
   if (what==="init") { if (I.init) return go("init"); return put("init/"+key, {nom:p.nom, mat, pos:fn||"FO", heures:0, lacheLe:T0}, "Affecté en ab initio"); }
   if (what==="pl") { if (I.opl) return upd("opl/"+I.opl.matricule, {checkLocal:"Instruction PL", checkNav:"Instruction PL", evalsRestantes:null}, "Passé en instruction PL");
     return put("opl/"+key, {...base, checkLocal:"Instruction PL", checkNav:"Instruction PL", plHeures:0, plEtapes:0, exclus:[], programmes:[]}, "Affecté en instruction PL"); }
-  if (what==="checks") { if (I.opl) return upd("opl/"+I.opl.matricule, {checkLocal:"En attente", checkNav:"En attente", evalsRestantes:null}, "Affecté aux checks nav et local");
-    return put("opl/"+key, {...base, checkLocal:"En attente", checkNav:"En attente", exclus:[], programmes:[]}, "Affecté aux checks nav et local"); }
+  if (what==="local" || what==="nav") { const f = what==="local"?"checkLocal":"checkNav", g = what==="local"?"checkNav":"checkLocal", lbl = what==="local"?"Affecté au check local":"Affecté au check nav";
+    if (I.opl) { const o = I.opl, other = o[g]==="Instruction PL" ? "" : (inEval(o) ? "" : (o[g]||""));
+      return upd("opl/"+o.matricule, {[f]:"En attente", [f+"Date"]:"", [g]:other, evalsRestantes:null}, lbl); }
+    return put("opl/"+key, {...base, [f]:"En attente", [g]:"", exclus:[], programmes:[]}, lbl); }
+  if (what==="checks") { if (I.opl) return upd("opl/"+I.opl.matricule, {checkLocal:"En attente", checkNav:"En attente", evalsRestantes:null}, "Affecté aux checks");
+    return put("opl/"+key, {...base, checkLocal:"En attente", checkNav:"En attente", exclus:[], programmes:[]}, "Affecté aux checks"); }
   if (what==="OPL" || what==="CDB" || what==="CIBLE") {
     const tot = R().evalsStd, data = {groupe:what, total:tot, evalsRestantes: I.opl && inEval(I.opl) ? I.opl.evalsRestantes : tot, echeance: what==="CDB"?"2026-11-16":addDays(T0,30), checkLocal:"Validé", checkNav:"Validé"};
     if (what==="CIBLE") Object.assign(data, {simuRequis:2, simuFaits:0, motif:"Approche instable"});
@@ -552,8 +558,13 @@ async function unassign(p, what){
   if (what==="max" && I.max) return del("max/"+I.max.id, "Retiré de la formation MAX");
   if (what==="valid" && I.valid) return del("valid/"+I.valid.id, "Retiré du suivi des validités");
   if (what==="safety") return assign(p, "safety");
+  if ((what==="local" || what==="nav") && I.opl) { const f = what==="local"?"checkLocal":"checkNav", g = what==="local"?"checkNav":"checkLocal";
+    if (!(I.opl[g]||"") && !(I.opl.programmes||[]).length) return del("opl/"+I.opl.matricule, "Affectation retirée");
+    return upd("opl/"+I.opl.matricule, {[f]:"", [f+"Date"]:""}, what==="local"?"Retiré du check local":"Retiré du check nav"); }
   if (["pl","checks","OPL","CDB","CIBLE"].includes(what) && I.opl) return del("opl/"+I.opl.matricule, "Affectation retirée");
 }
+const chkPending = v => !!v && v!=="Validé" && v!=="Instruction PL";
+const chkOn = v => !!v && v!=="Instruction PL";
 function oplState(o){ if (!o) return ""; if (inEval(o)) return o.groupe||"OPL"; return o.checkLocal==="Instruction PL" ? "pl" : "checks"; }
 
 /* champ de saisie directe sur la fiche */
@@ -566,9 +577,12 @@ function vFiche(){
   const I = pilotInfo(p), r = R(), s = pilotStatus(p, I), sim = simuFor(p), fx = st.fiches[p.id] || {};
   const o = I.opl, ins = I.instr, os = oplState(o);
   /* parcours */
-  const steps = [["pl","Instr. PL"],["checks","Checks"],["eval","Évals"],["instr","Instr. ligne"],["lache","Lâché"],["init","Ab initio"],["ligne","En ligne"]];
-  const order = {pl:0, checks:1, eval:2, instr:3, init:5, ligne:6, max:6};
-  const cur = order[s.phase] ?? 6;
+  const steps = [["pl","Instr. PL"],["local","Check local"],["nav","Check nav"],["eval","Évals"],["instr","Instr. ligne"],["lache","Lâché"],["init","Ab initio"],["ligne","En ligne"]];
+  const order = {pl:0, checks:1, eval:3, instr:4, init:6, ligne:7, max:7};
+  const cur = order[s.phase] ?? 7;
+  const stepCls = (k,i) => {
+    if (s.phase==="checks" && (k==="local"||k==="nav")) { const v = o[k==="local"?"checkLocal":"checkNav"]; return v==="Validé"?"done":(chkPending(v)?"act":""); }
+    return i===cur?"act":(i<cur?"done":""); };
   /* valeurs auto (planning) et saisies */
   const autoLast = sim.last ? sim.last.date : "", autoNext = sim.next ? sim.next.date : "";
   const cl = I.valid && I.valid.items && I.valid.items.CL || "";
@@ -588,7 +602,7 @@ function vFiche(){
   <section class="du"><div class="du-t">Fiche pilote <span>${esc(p.fonction||"")} · ${esc(p.mat||"sans matricule")}</span></div>
     <div class="idn"><div class="nm">${esc(p.nom)}</div><div class="pill ${s.c==="c-red"?"crit":s.c==="c-amb"?"warn":s.c==="c-grn"?"ok":"mag"}">${esc(s.t)}</div></div>
     <div class="row">${[I.safety&&`<span class="pill ok">Safety pilot</span>`, I.evaluateur&&`<span class="pill info">TRI évaluateur</span>`, (I.tri&&!I.evaluateur)&&`<span class="pill info">TRI</span>`, I.cand&&`<span class="pill mag">Candidat TRI</span>`].filter(Boolean).join(" ")}</div>
-    <div class="fma">${steps.map(([k,l],i)=>`<div class="${i===cur?"act":(i<cur?"done":"")}">${l}</div>`).join("")}</div>
+    <div class="fma">${steps.map(([k,l],i)=>`<div class="${stepCls(k,i)}">${l}</div>`).join("")}</div>
     ${I.init && (I.init.heures||0) < r.initHeures?`<div class="item warn"><div class="txt"><b>Ab initio</b><div class="sub">Ne vole jamais avec un autre ab initio.</div></div></div>`:""}
   </section>
 
@@ -604,7 +618,7 @@ function vFiche(){
       ${o&&os==="pl"?fld(`Heures PL (sur ${r.plHeures})`,"plHeures","number", o.plHeures||0, ""):""}
       ${o&&os==="pl"?fld(`Étapes PL (sur ${r.plEtapes})`,"plEtapes","number", o.plEtapes||0, ""):""}
     </div>
-    ${o&&os==="checks"?`<div class="list">${[["checkLocal","Check local (vol local)"],["checkNav","Check nav"]].map(([f,l])=>{ const v = o[f]||"En attente", ok = v==="Validé", dt = o[f+"Date"];
+    ${o&&os==="checks"?`<div class="list">${[["checkLocal","Check local (vol local)"],["checkNav","Check nav"]].filter(([f])=>chkOn(o[f])).map(([f,l])=>{ const v = o[f]||"En attente", ok = v==="Validé", dt = o[f+"Date"];
       return `<div class="item ${ok?"ok":"warn"}"><div class="txt"><b>${l}</b><div class="sub">${ok?"Validé"+(dt?" le "+frDate(dt):""):esc(v)}</div></div>
       ${ok?`<button class="b sm" data-chk="${o.matricule}" data-f="${f}" data-undo="1">Annuler</button>`:`<input type="date" id="cd-${f}" value="${T0}" aria-label="Date du ${l}"><button class="b sm okb" data-chk="${o.matricule}" data-f="${f}">Valider</button>`}</div>`;}).join("")}</div>
       ${o.checkLocal==="Validé"&&o.checkNav==="Validé"?`<button class="b pri" data-assign="OPL" data-pid="${esc(p.id)}">Checks validés : passer en évaluations ▸</button>`:""}`:""}
@@ -620,7 +634,8 @@ function vFiche(){
       ${sw("instr","Instruction ligne", !!ins, ins?`${L}/${r.legsLacher} legs${ins.lache?" · lâché le "+frDate(ins.lache):""}`:"")}
       ${sw("init","Ab initio", !!I.init, I.init?`${I.init.heures||0} h sur ${r.initHeures}`:"")}
       ${sw("pl","Instruction PL", os==="pl", os==="pl"?`${o.plHeures||0} h · ${o.plEtapes||0} étapes`:"")}
-      ${sw("checks","Checks nav et local", os==="checks", os==="checks"?`Local ${esc(o.checkLocal)} · Nav ${esc(o.checkNav)}`:"")}
+      ${sw("local","Check local (vol local)", os==="checks" && chkOn(o.checkLocal), os==="checks" && chkOn(o.checkLocal) ? (o.checkLocal==="Validé"?"Validé"+(o.checkLocalDate?" le "+frDate(o.checkLocalDate):""):esc(o.checkLocal)) : "")}
+      ${sw("nav","Check nav", os==="checks" && chkOn(o.checkNav), os==="checks" && chkOn(o.checkNav) ? (o.checkNav==="Validé"?"Validé"+(o.checkNavDate?" le "+frDate(o.checkNavDate):""):esc(o.checkNav)) : "")}
       ${sw("OPL","Évaluation OPL", os==="OPL", evDetail("OPL"))}
       ${sw("CDB","Évaluation passage CDB", os==="CDB", evDetail("CDB"))}
       ${sw("CIBLE","Entraînement ciblé", os==="CIBLE", evDetail("CIBLE"))}
@@ -628,7 +643,7 @@ function vFiche(){
       ${sw("valid","Suivi des validités", !!I.valid, "")}
       ${sw("safety","Safety pilot", !!I.safety, "")}
     </div>
-    <div class="note">Instruction PL, checks et évaluations sont des étapes du même parcours : en allumer une éteint les autres.</div>
+    <div class="note">Instruction PL, checks et évaluations se suivent : passer aux checks éteint l'instruction PL, passer aux évaluations éteint les checks. Check local et check nav sont indépendants.</div>
   </section>
 
   ${(I.tr||sim.all.length)?`<section class="du"><div class="du-t">Activité</div>
@@ -790,8 +805,10 @@ function vInit(){
 }
 
 /* --- Instruction PL & checks --- */
-const STATUTS = ["En attente","Prévu","Validé","Instruction PL"];
+const STATUTS = ["","En attente","Prévu","Validé","Instruction PL"];
 function selStat(o,f){ const v = o[f]||""; const opts = STATUTS.includes(v)?STATUTS:[v,...STATUTS];
+  return `<select data-stat="${o.matricule}" data-f="${f}" aria-label="${f}">${opts.map(x=>`<option value="${esc(x)}" ${x===v?"selected":""}>${esc(x||"— non affecté")}</option>`).join("")}</select>`; }
+function selStatOld(o,f){ const v = o[f]||""; const opts = STATUTS;
   return `<select data-stat="${o.matricule}" data-f="${f}" aria-label="${f}">${opts.map(s=>`<option ${s===v?"selected":""}>${esc(s)}</option>`).join("")}</select>`; }
 function vPL(){
   const r = R(), Pi = ev().filter(o=>!inEval(o)), PL = Pi.filter(o=>o.checkLocal==="Instruction PL"), CK = Pi.filter(o=>o.checkLocal!=="Instruction PL");
