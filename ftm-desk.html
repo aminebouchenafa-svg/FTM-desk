@@ -1,146 +1,189 @@
 <title>FTM Desk 737</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap">
 <style>
-/* Layout: home = overhead annunciator panel (one lit tile per module) above the alarm list; each module opens as its own view */
+/* Layout: a flight deck. Glareshield on top (master warning / caution), then EICAS + CDU + overhead push-buttons on the home page;
+   every module opens on a black display unit. Colours follow EFIS conventions: white data, cyan labels and entries,
+   green active/OK, magenta targets, amber caution, red warning. Deliberately single (night cockpit) theme. */
 :root{
-  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#13203A; --muted:#5D6A80; --line:#DCE2EB;
-  --accent:#1E58B4; --accent-soft:#E3ECFA;
-  --crit:#C42B2B; --crit-soft:#FBE7E6; --warn:#B26A00; --warn-soft:#FDF1DC; --ok:#1E7A46; --ok-soft:#E2F3E8;
-  --panel:#1A2233; --panel-ink:#C9D3E3; --lit-warn:#F2B33D; --lit-crit:#F05A4F; --lit-ok:#55C27D;
-  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
-  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+  --deck:#2F353C; --deck-hi:#434A53; --deck-lo:#22272D; --glare:#16191C; --bezel:#0F1113; --screen:#04070A; --grid:#17222B;
+  --w:#ECEFF3; --dim:#7F8B97; --cyn:#43D3E6; --grn:#3EDC74; --mag:#E56CE8; --amb:#FFB020; --red:#FF4A3D;
+  --font:"B612","Segoe UI",system-ui,sans-serif; --mono:"B612 Mono",ui-monospace,Menlo,monospace;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0E1420; --surface:#162032; --ink:#E6ECF5; --muted:#93A1B8; --line:#26324A;
-  --accent:#7FA9F0; --accent-soft:#1C2B47;
-  --crit:#F07A72; --crit-soft:#3A1D20; --warn:#F0B65A; --warn-soft:#352A16; --ok:#6BCB8E; --ok-soft:#173022;
-  --panel:#0A0F18; --panel-ink:#AEB9CC; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0E1420; --surface:#162032; --ink:#E6ECF5; --muted:#93A1B8; --line:#26324A;
-  --accent:#7FA9F0; --accent-soft:#1C2B47;
-  --crit:#F07A72; --crit-soft:#3A1D20; --warn:#F0B65A; --warn-soft:#352A16; --ok:#6BCB8E; --ok-soft:#173022;
-  --panel:#0A0F18; --panel-ink:#AEB9CC; color-scheme:dark}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
-.wrap{max-width:900px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
-.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:10px}
+html,body{background:var(--deck)}
+body{color:var(--w);font-family:var(--font);font-size:14.5px;line-height:1.45;
+  background:radial-gradient(120% 60% at 50% 0%,var(--deck-hi),var(--deck) 60%,var(--deck-lo))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--glare)}
+.wrap{max-width:1100px;margin:0 auto;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+/* glareshield */
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:linear-gradient(#1D2125,var(--glare));border-bottom:3px solid #0B0D0F;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:9px}
 .top .l{display:flex;align-items:center;gap:10px;min-width:0}
-h1{font-family:var(--display);font-weight:700;font-size:1.35rem;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-h1 small{font-weight:500;color:var(--muted);font-size:.9rem;margin-left:6px}
-.back{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 10px;font:600 .9rem var(--body);cursor:pointer}
-.date{font-family:var(--mono);font-size:.78rem;color:var(--muted);white-space:nowrap}
-main{padding-block:16px 56px;display:grid;gap:18px}
+.brand{display:grid;line-height:1.05;min-width:0}
+h1{font:700 1.05rem var(--font);letter-spacing:.14em;margin:0;color:var(--w);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clock{font:400 .72rem var(--mono);color:var(--grn);letter-spacing:.03em;white-space:nowrap}
+@media (max-width:480px){.clock .dt{display:none}.master{width:62px;font-size:.52rem}h1{font-size:.9rem;letter-spacing:.08em}}
+.back{border:1px solid #3A4149;background:#262B31;color:var(--w);border-radius:5px;padding:6px 10px;font:700 .72rem var(--font);letter-spacing:.1em;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.masters{display:flex;gap:6px}
+.master{width:74px;height:46px;border-radius:5px;border:2px solid #3A2A12;background:#1E1A14;color:#5B4A2E;font:700 .58rem var(--font);letter-spacing:.06em;line-height:1.15;text-transform:uppercase;cursor:pointer;display:grid;place-items:center;padding:3px;text-align:center}
+.master.w{border-color:#3C1714;background:#1F1413;color:#5C2B27}
+.master b{font:700 .95rem var(--mono)}
+.master.on.c{background:#3D2A08;color:var(--amb);border-color:var(--amb);box-shadow:0 0 14px rgba(255,176,32,.45)}
+.master.on.w{background:#430F0B;color:var(--red);border-color:var(--red);box-shadow:0 0 16px rgba(255,74,61,.55)}
+@media (prefers-reduced-motion:no-preference){.master.on.w{animation:mw 1.2s steps(2,start) infinite}@keyframes mw{50%{box-shadow:0 0 4px rgba(255,74,61,.2);opacity:.82}}}
+main{padding-block:14px 60px;display:grid;gap:14px}
 main>*{min-width:0}
-h2{font-family:var(--display);font-weight:600;font-size:1.02rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:4px 0 0}
-h3{font-family:var(--display);font-weight:600;font-size:1.1rem;margin:0}
-/* annunciator panel */
-.panel{background:var(--panel);border-radius:12px;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
-.ann{position:relative;border:1px solid #2C3850;background:#121A28;color:var(--panel-ink);border-radius:6px;padding:10px 10px 9px;text-align:left;cursor:pointer;display:grid;gap:3px;min-height:76px;font:inherit}
-.ann .c{font:700 .98rem var(--display);letter-spacing:.08em;text-transform:uppercase}
-.ann .s{font-size:.76rem;opacity:.85;line-height:1.25}
-.ann .k{position:absolute;top:8px;right:9px;font:500 .8rem var(--mono)}
-.ann.crit{background:#3A1414;border-color:var(--lit-crit);color:#FFD9D5;box-shadow:0 0 0 1px var(--lit-crit) inset,0 0 14px rgba(240,90,79,.25)}
-.ann.crit .c{color:var(--lit-crit)}
-.ann.warn{background:#342611;border-color:var(--lit-warn);color:#FCE7BE;box-shadow:0 0 0 1px var(--lit-warn) inset}
-.ann.warn .c{color:var(--lit-warn)}
-.ann.ok .c{color:var(--lit-ok)}
-.ann:focus-visible{outline:2px solid var(--lit-warn);outline-offset:2px}
-@media (prefers-reduced-motion:no-preference){.ann.crit .c{animation:blink 1.6s steps(2,start) infinite}@keyframes blink{50%{opacity:.55}}}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px;text-align:left;color:inherit;font:inherit}
-.kpi b{display:block;font-family:var(--display);font-size:1.9rem;line-height:1;font-variant-numeric:tabular-nums}
-.kpi span{font-size:.84rem;color:var(--muted)}
-.kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)} .kpi.ok b{color:var(--ok)}
-.list{display:grid;gap:8px}
-.item{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:9px 12px;display:flex;gap:10px;align-items:flex-start}
-.item.crit{border-left-color:var(--crit)} .item.warn{border-left-color:var(--warn)} .item.info{border-left-color:var(--accent)} .item.ok{border-left-color:var(--ok)}
+/* deck layout on home */
+.deck{display:grid;gap:14px;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-areas:"eicas cdu" "ovh cdu" "ovh memo"}
+.deck>*{min-width:0}
+.deck{align-items:start}
+@media (max-width:760px){.deck{grid-template-columns:minmax(0,1fr);grid-template-areas:"cdu" "eicas" "ovh" "memo"}}
+/* display units */
+.du{background:var(--screen);border:7px solid var(--bezel);border-radius:12px;box-shadow:0 0 0 1px #3B434C,inset 0 0 26px rgba(63,211,230,.05),0 8px 18px rgba(0,0,0,.35);padding:12px 12px 14px;display:grid;gap:10px;min-width:0;align-content:start}
+.du-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font:700 .72rem var(--font);letter-spacing:.16em;color:var(--cyn);text-transform:uppercase;border-bottom:1px solid var(--grid);padding-bottom:6px}
+.du-t span{color:var(--dim);letter-spacing:.06em;font-weight:400}
+h2{font:700 .74rem var(--font);text-transform:uppercase;letter-spacing:.16em;color:var(--cyn);margin:6px 0 0}
+h3{font:700 .95rem var(--font);margin:0;color:var(--w);letter-spacing:.02em}
+/* EICAS messages */
+.eicas{display:grid;gap:2px}
+.msgl{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;background:none;border:0;border-left:3px solid transparent;color:var(--w);font:400 .86rem var(--mono);padding:5px 6px;cursor:pointer;border-radius:2px}
+.msgl:hover{background:#0B1218}
+.msgl .m{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.02em}
+.msgl .d{display:block;color:var(--dim);font:400 .74rem var(--font);text-transform:none;letter-spacing:0;margin-top:1px}
+.msgl.crit{color:var(--red);border-left-color:var(--red)} .msgl.warn{color:var(--amb);border-left-color:var(--amb)} .msgl.info{color:var(--w)} .msgl.ok{color:var(--grn)}
+/* overhead panel */
+.panel{background:linear-gradient(var(--deck-hi),var(--deck));border:1px solid #545C66;border-radius:10px;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 18px rgba(0,0,0,.3)}
+.panel-t{grid-column:1/-1;font:700 .66rem var(--font);letter-spacing:.2em;color:#C8CED6;text-transform:uppercase;text-align:center;border-bottom:1px solid #59616B;padding-bottom:5px}
+.ann{position:relative;border:2px solid #121417;background:linear-gradient(#262A2F,#1A1D21);color:#8D97A3;border-radius:4px;padding:9px 8px 8px;text-align:center;cursor:pointer;display:grid;gap:2px;min-height:68px;font:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 2px 0 #0D0F11}
+.ann .c{font:700 .78rem var(--font);letter-spacing:.1em;text-transform:uppercase;color:#C9CFD7}
+.ann .s{font-size:.64rem;letter-spacing:.02em;line-height:1.2;color:#7D8792}
+.ann .k{position:absolute;top:4px;right:6px;font:700 .7rem var(--mono)}
+.ann .lt{height:5px;width:44%;margin:2px auto 0;border-radius:2px;background:#2B3036}
+.ann.ok .lt{background:#1F5A34;box-shadow:0 0 6px rgba(62,220,116,.35)}
+.ann.warn{border-color:#5A3E0C}.ann.warn .c,.ann.warn .k{color:var(--amb)}.ann.warn .lt{background:var(--amb);box-shadow:0 0 10px var(--amb)}
+.ann.crit{border-color:#62170F}.ann.crit .c,.ann.crit .k{color:var(--red)}.ann.crit .lt{background:var(--red);box-shadow:0 0 12px var(--red)}
+.ann:active{transform:translateY(1px)}
+/* CDU */
+.cdu .sp{display:flex;gap:8px;align-items:center;background:#0B1116;border:1px solid var(--grid);border-radius:4px;padding:4px 8px}
+.cdu .sp b{font:700 .7rem var(--font);color:var(--dim);letter-spacing:.1em}
+.cdu input[type=search]{border:0;background:transparent;color:var(--cyn);font:400 1rem var(--mono);padding:6px 2px;flex:1;min-width:0;text-transform:uppercase}
+.lsk{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;background:none;border:0;border-bottom:1px solid var(--grid);color:var(--w);font:inherit;text-align:left;padding:7px 2px;cursor:pointer}
+.lsk:hover{background:#0B1218}
+.lsk .k{width:10px;height:18px;border-radius:2px;background:#242A30;border:1px solid #3A424A}
+.lsk .n{font:700 .88rem var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lsk .n small{display:block;font:400 .72rem var(--mono);color:var(--dim)}
+.lsk .s{font:400 .74rem var(--mono);text-align:right;white-space:nowrap}
+.c-grn{color:var(--grn)} .c-amb{color:var(--amb)} .c-red{color:var(--red)} .c-cyn{color:var(--cyn)} .c-mag{color:var(--mag)} .c-dim{color:var(--dim)} .c-w{color:var(--w)}
+/* readouts */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.kpi{background:#070B0F;border:1px solid var(--grid);border-radius:4px;padding:9px 10px;text-align:left;color:inherit;font:inherit}
+.kpi b{display:block;font:700 clamp(1.05rem,4.2vw,1.5rem) var(--mono);line-height:1.1;overflow-wrap:anywhere;color:var(--grn);font-variant-numeric:tabular-nums}
+.kpi span{font:400 .7rem var(--font);color:var(--cyn);text-transform:uppercase;letter-spacing:.08em}
+.kpi.crit b{color:var(--red)} .kpi.warn b{color:var(--amb)} .kpi.ok b{color:var(--grn)} .kpi.mag b{color:var(--mag)} .kpi.w b{color:var(--w)}
+.list{display:grid;gap:6px}
+.item{background:#070B0F;border:1px solid var(--grid);border-left:3px solid var(--dim);border-radius:3px;padding:8px 10px;display:flex;gap:10px;align-items:flex-start;color:var(--w)}
+.item.crit{border-left-color:var(--red)} .item.warn{border-left-color:var(--amb)} .item.info{border-left-color:var(--cyn)} .item.ok{border-left-color:var(--grn)}
 .item .txt{flex:1;min-width:0}
-button.item{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
-.sub{color:var(--muted);font-size:.85rem}
-.pill{display:inline-block;font:600 .72rem var(--body);letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:999px;white-space:nowrap}
-.pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.info{background:var(--accent-soft);color:var(--accent)} .pill.mute{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;min-width:0}
-.card.crit{border-left:4px solid var(--crit)} .card.warn{border-left:4px solid var(--warn)} .card.done{opacity:.72}
+button.item{width:100%;text-align:left;font:inherit;cursor:pointer}
+.sub{color:var(--dim);font-size:.8rem}
+.pill{display:inline-block;font:700 .66rem var(--font);letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.pill.crit{color:var(--red)} .pill.warn{color:var(--amb)} .pill.ok{color:var(--grn)} .pill.info{color:var(--cyn)} .pill.mute{color:var(--dim)} .pill.mag{color:var(--mag)}
+.card{background:var(--screen);border:5px solid var(--bezel);border-radius:10px;box-shadow:0 0 0 1px #39414A;padding:12px;display:grid;gap:10px;min-width:0}
+.card.crit{box-shadow:0 0 0 1px var(--red),0 0 12px rgba(255,74,61,.25)} .card.warn{box-shadow:0 0 0 1px var(--amb)} .card.done{opacity:.6}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .spread{justify-content:space-between}
 .grow{flex:1 1 160px;min-width:0}
-.name{font-weight:700;font-size:1.02rem}
-.mono{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.name{font:700 1rem var(--font)}
+.mono{font:400 .76rem var(--mono);color:var(--dim)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{font:inherit;font-size:.82rem;padding:3px 9px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.chip{font:400 .78rem var(--mono);padding:3px 8px;border-radius:2px;border:1px solid #2A333C;background:#0A1015;color:var(--w)}
 button.chip{cursor:pointer}
-.chip.free{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
-.chip.free.sug{box-shadow:inset 0 0 0 1px var(--ok);font-weight:700}
-.chip.no{text-decoration:line-through;color:var(--muted)}
-.chip.pend{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
-.chip.on{background:var(--accent);border-color:var(--accent);color:var(--surface)}
-.big{font-family:var(--display);font-weight:700;font-size:1.6rem;line-height:1;font-variant-numeric:tabular-nums}
+.chip.free{border-color:var(--grn);color:var(--grn)}
+.chip.free.sug{background:#0E2B19;font-weight:700}
+.chip.no{text-decoration:line-through;color:var(--dim)}
+.chip.pend{border-color:var(--cyn);color:var(--cyn)}
+.chip.on{border-color:var(--mag);color:var(--mag)}
+.big{font:700 1.45rem var(--mono);line-height:1;font-variant-numeric:tabular-nums;color:var(--grn)}
 .stats{display:flex;gap:18px;flex-wrap:wrap}
-.prog{display:grid;gap:6px}
-.prog .p{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.9rem;padding:6px 8px;border-radius:6px;background:var(--bg)}
-button.b{font:600 .85rem var(--body);border-radius:7px;padding:6px 11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
-button.b.pri{background:var(--accent);border-color:var(--accent);color:var(--surface)}
-button.b.okb{border-color:var(--ok);color:var(--ok)}
-button.b.crb{border-color:var(--crit);color:var(--crit)}
-button.b.sm{padding:3px 8px;font-size:.78rem}
-button.b:disabled{opacity:.45;cursor:not-allowed}
+.stats .note{color:var(--cyn);text-transform:uppercase;letter-spacing:.06em;font-size:.66rem}
+.prog{display:grid;gap:4px}
+.prog .p{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.84rem;padding:5px 7px;border-radius:2px;background:#0A1015;border:1px solid var(--grid)}
+/* push buttons */
+button.b{font:700 .74rem var(--font);letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:7px 11px;border:1px solid #101316;background:linear-gradient(#3A4048,#2A2F35);color:#E4E8ED;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 2px 0 #0D0F11}
+button.b:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+button.b.pri{color:var(--cyn);border-color:#0E3E46;box-shadow:inset 0 0 0 1px rgba(67,211,230,.35),0 2px 0 #0D0F11}
+button.b.okb{color:var(--grn);box-shadow:inset 0 0 0 1px rgba(62,220,116,.35),0 2px 0 #0D0F11}
+button.b.crb{color:var(--red);box-shadow:inset 0 0 0 1px rgba(255,74,61,.35),0 2px 0 #0D0F11}
+button.b.sm{padding:4px 8px;font-size:.66rem}
+button.b:disabled{opacity:.38;cursor:not-allowed}
 button.link{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
-button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-select,input[type=text],input[type=date],input[type=number],input[type=search],textarea{font:inherit;font-size:.92rem;padding:6px 8px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0;max-width:100%}
-input[type=number]{width:90px}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--mag);outline-offset:2px}
+select,input[type=text],input[type=date],input[type=number],input[type=search],textarea{font:400 .86rem var(--mono);padding:6px 8px;border-radius:3px;border:1px solid #2A333C;background:#0A1015;color:var(--cyn);min-width:0;max-width:100%}
+input[type=number]{width:84px}
 input[type=search]{width:100%}
+input[type=checkbox]{accent-color:var(--grn);width:17px;height:17px}
 textarea{width:100%;min-height:64px;resize:vertical}
-.form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px;border-radius:8px;background:var(--accent-soft)}
-.form label{font-size:.8rem;color:var(--muted);display:grid;gap:2px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
-.seg button{border:0;background:var(--surface);color:var(--muted);font:600 .84rem var(--body);padding:6px 10px;cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
-.day{display:grid;gap:6px}
-.dayh{font-family:var(--display);font-weight:600;font-size:1rem;display:flex;gap:8px;align-items:baseline}
-.dayh.today{color:var(--accent)}
-.slot{display:grid;grid-template-columns:58px 1fr;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:8px 10px}
-.slot.empty{border-left-color:var(--crit)} .slot.mine{border-left-color:var(--accent);background:var(--accent-soft)}
-.slot .t{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
-.slot .t b{display:block;color:var(--ink);font-weight:500}
-.slot .w{min-width:0;display:grid;gap:4px}
-.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
-table{border-collapse:collapse;width:100%;font-size:.88rem}
-th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:middle}
-th{font:600 .72rem var(--body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px;border-radius:4px;background:#0A1015;border:1px dashed #24414A}
+.form label{font:400 .7rem var(--font);color:var(--cyn);display:grid;gap:2px;text-transform:uppercase;letter-spacing:.06em}
+.seg{display:inline-flex;border:1px solid #101316;border-radius:4px;overflow:hidden;flex-wrap:wrap;background:#1D2126}
+.seg button{border:0;border-right:1px solid #101316;background:linear-gradient(#353B42,#272C31);color:#AEB7C1;font:700 .68rem var(--font);letter-spacing:.06em;text-transform:uppercase;padding:7px 10px;cursor:pointer}
+.seg button[aria-pressed="true"]{color:var(--grn);background:#10261A;box-shadow:inset 0 -2px 0 var(--grn)}
+.day{display:grid;gap:5px}
+.dayh{font:700 .82rem var(--font);display:flex;gap:8px;align-items:baseline;color:var(--cyn);letter-spacing:.06em;text-transform:uppercase}
+.dayh.today{color:var(--mag)}
+.slot{display:grid;grid-template-columns:54px 1fr;gap:10px;background:#070B0F;border:1px solid var(--grid);border-left:3px solid var(--dim);border-radius:3px;padding:7px 9px}
+.slot.empty{border-left-color:var(--red)} .slot.mine{border-left-color:var(--mag)}
+.slot .t{font:400 .74rem var(--mono);color:var(--dim)}
+.slot .t b{display:block;color:var(--cyn);font-weight:700}
+.slot .w{min-width:0;display:grid;gap:3px}
+.tbl{overflow-x:auto;background:#070B0F;border:1px solid var(--grid);border-radius:4px}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--grid);vertical-align:middle}
+th{font:700 .64rem var(--font);text-transform:uppercase;letter-spacing:.1em;color:var(--cyn);white-space:nowrap}
 td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 tr:last-child td{border-bottom:0}
-td.cell{white-space:nowrap;font-family:var(--mono);font-size:.78rem}
-td.cell.crit{background:var(--crit-soft);color:var(--crit)} td.cell.warn{background:var(--warn-soft);color:var(--warn)} td.cell.ok{color:var(--ok)}
-.note{font-size:.82rem;color:var(--muted)}
-.empty-state{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:20px;text-align:center;color:var(--muted)}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:.9rem;z-index:20;max-width:calc(100% - 32px)}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+td.cell{white-space:nowrap;font:400 .76rem var(--mono)}
+td.cell.crit{color:var(--red);background:#1E0A08} td.cell.warn{color:var(--amb);background:#1B1405} td.cell.ok{color:var(--grn)}
+.note{font-size:.78rem;color:var(--dim)}
+.empty-state{border:1px dashed #2B3640;border-radius:4px;padding:18px;text-align:center;color:var(--dim);background:#070B0F}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:#0A1015;border:1px solid var(--grn);color:var(--grn);font:400 .84rem var(--mono);padding:9px 14px;border-radius:4px;z-index:20;max-width:calc(100% - 32px);box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
 .grid2>*{min-width:0}
-/* leg gauge: 0..40 with marks at safety, alarm, release */
-.gauge{position:relative;height:14px;border-radius:7px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
-.gauge i{position:absolute;inset:0 auto 0 0;background:var(--accent)}
-.gauge.warn i{background:var(--warn)} .gauge.crit i{background:var(--crit)} .gauge.ok i{background:var(--ok)}
-.gauge u{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);opacity:.35}
-.gscale{display:flex;justify-content:space-between;font:500 .7rem var(--mono);color:var(--muted)}
-.msg{white-space:pre-wrap;font-family:var(--mono);font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto}
-details>summary{cursor:pointer;font-weight:600}
-.tip{display:grid;gap:4px;padding:10px 12px;border-radius:8px;background:var(--bg)}
-.tip b{font-family:var(--display);font-size:1rem}
+/* tape gauge */
+.gauge{position:relative;height:12px;border-radius:2px;background:#0A1015;border:1px solid #2A333C;overflow:hidden}
+.gauge i{position:absolute;inset:0 auto 0 0;background:var(--grn)}
+.gauge.warn i{background:var(--amb)} .gauge.crit i{background:var(--red)} .gauge.ok i{background:var(--grn)}
+.gauge u{position:absolute;top:0;bottom:0;width:2px;background:var(--mag)}
+.gscale{display:flex;justify-content:space-between;font:400 .64rem var(--mono);color:var(--dim)}
+.msg{white-space:pre-wrap;font:400 .78rem var(--mono);background:#0A1015;border:1px solid var(--grid);border-radius:3px;padding:10px;overflow-x:auto;color:var(--w)}
+details>summary{cursor:pointer;font:700 .74rem var(--font);color:var(--cyn);text-transform:uppercase;letter-spacing:.08em}
+.tip{display:grid;gap:4px;padding:9px 11px;border-radius:3px;background:#0A1015;border:1px solid var(--grid)}
+.tip b{font:700 .86rem var(--font)}
+/* pilot card */
+.fma{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:4px}
+.fma div{border:1px solid #2A333C;padding:6px 4px;text-align:center;font:700 .66rem var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border-radius:2px}
+.fma .done{color:var(--grn);border-color:#1E5A34}
+.fma .act{color:var(--mag);border-color:var(--mag);box-shadow:0 0 8px rgba(229,108,232,.35)}
+.idn{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.idn .nm{font:700 1.35rem var(--font);letter-spacing:.02em;line-height:1.15}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.keys button{min-height:44px}
 </style>
 
 <header>
   <div class="wrap top">
-    <div class="l"><button class="back" id="back" hidden>Panneau</button><h1 id="ttl">FTM Desk<small>B737 NG/MAX</small></h1></div>
-    <span class="date" id="today"></span>
+    <div class="l"><button class="back" id="back" hidden>◂ Panneau</button><div class="brand"><h1 id="ttl">FTM Desk · B737</h1><span class="clock" id="clock"></span></div></div>
+    <div class="masters">
+      <button class="master w" id="mw" aria-label="Alarmes rouges">Master<br>warning<b id="mwn"></b></button>
+      <button class="master c" id="mc" aria-label="Alarmes orange">Master<br>caution<b id="mcn"></b></button>
+    </div>
   </div>
 </header>
 <main class="wrap" id="view">
-  <div class="empty-state">Chargement du FTM Desk : évaluations, lâchers, simulateur, validités, rappels…</div>
+  <div class="empty-state">Mise sous tension du poste FTM : alarmes, pilotes, évaluations, simulateur…</div>
 </main>
 <div class="toast" id="toast" hidden></div>
 
@@ -165,13 +208,14 @@ const norm = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperC
 const surname = s => { const w = norm(s).split(" "); return ["EL","AIT","BEN","OULD","SABER","HADJ","AHMED","NAIT"].includes(w[0]) && w[1] ? w[0]+" "+w[1] : (w[0]||""); };
 const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const jx = n => n===0?"aujourd'hui":(n>0?"J-"+n:"dépassé de "+(-n)+" j");
-$("#today").textContent = dayLabel(T0) + " " + TODAY.getFullYear();
+function tick(){ const d = new Date(); const el = document.getElementById("clock"); if (el) el.innerHTML = `<span class="dt">${dayLabel(T0)} ${TODAY.getFullYear()} · </span>LCL ${pad(d.getHours())}:${pad(d.getMinutes())} · ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}Z`; }
+tick(); setInterval(tick, 20000);
 
 const COLS = ["opl","ref","simu","vols","memos","events","instr","init","valid","max","simulog","perso"];
 const st = { db:null, dbFailed:false, loaded:{} }; COLS.forEach(c=>{ st[c]={}; st.loaded[c]=false; });
-const ui = { view:"home", form:{}, f:{} };
-const VIEWS = ["home","memos","events","lacher","init","pl","evals","simu","valid","max","equipes","vols","dim","moi","regles"];
-try { const t = localStorage.getItem("ftm.view"); if (VIEWS.includes(t)) ui.view = t; } catch(e) {}
+const ui = { view:"home", form:{}, f:{}, pid:null };
+const VIEWS = ["home","pilotes","fiche","memos","events","lacher","init","pl","evals","simu","valid","max","equipes","vols","dim","moi","regles"];
+try { const t = localStorage.getItem("ftm.view"); if (VIEWS.includes(t)) ui.view = t; ui.pid = localStorage.getItem("ftm.pid"); } catch(e) {}
 const h = (location.hash||"").slice(1); if (VIEWS.includes(h)) ui.view = h;
 const F = (k,d) => (k in ui.f ? ui.f[k] : d);
 
@@ -340,12 +384,14 @@ function alerts(){
   });
   // lâcher
   lacherList().forEach(p=>{
+    if (p.lache && daysTo(p.lache)>=-2) A.push({k:"warn", v:"lacher", t:`${p.nom} lâché ${p.lache===T0?"aujourd'hui":"le "+frDate(p.lache)}`, s:"Ab initio : moins de "+r.initHeures+" h, jamais avec un autre ab initio. Penser au dossier."});
     if (p.lache) return; const L = legsOf(p);
+    if (p.cl && (p.cl.faits||0) >= (p.cl.requis||2)) A.push({k:"crit", v:"lacher", t:`${p.nom} : check line terminé`, s:"À déclarer lâché (bouton Lâché → ab initio)"});
     if (L >= r.legsAlerte) A.push({k:"crit", v:"lacher", t:`${p.nom} : ${L} legs sur ${r.legsLacher}`, s: L>=r.legsLacher?"Check Line à programmer":"Alarme 36 legs : suivre de près et programmer le contrôle"});
     legsSansSafety(p).forEach(v=>A.push({k:"crit", v:"lacher", t:`${p.nom} : vol du ${frDate(v.date)} sans safety pilot`, s:`Les ${r.legsSafety} premiers legs exigent un safety pilot de la liste`}));
   });
   // initiation
-  Object.entries(st.init).forEach(([id,p])=>{ if ((p.heures||0) >= r.initHeures) A.push({k:"info", v:"init", t:`${p.nom} : ${p.heures} h, fin d'initiation`, s:"Peut sortir de la liste initiation"}); });
+  Object.entries(st.init).forEach(([id,p])=>{ if ((p.heures||0) >= r.initHeures) A.push({k:"info", v:"init", t:`${p.nom} : ${p.heures} h, fin de période ab initio`, s:"Peut sortir de la liste ab initio"}); });
   // simu
   allSlots().filter(s=>s.date>=T0 && s.date<=addDays(T0,14) && isEmptySlot(s)).forEach(s=>A.push({k: daysTo(s.date)<=3?"crit":"warn", v:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
   const nlog = Object.values(st.simulog).filter(l=>!l.notifie).length;
@@ -360,35 +406,226 @@ function alerts(){
   memos().filter(m=>!m.fait && m.echeance && daysTo(m.echeance)<=7).forEach(m=>A.push({k:memoLevel(m), v:"memos", t:m.texte, s:`${m.source?m.source+" · ":""}${frDate(m.echeance)} (${jx(daysTo(m.echeance))})`}));
   events().forEach(e=>{ const n = daysTo(e.date), open = (e.objectifs||[]).filter(o=>!o.fait).length; if (n>=0 && n<=30 && open) A.push({k:n<=7?"crit":"warn", v:"events", t:`${e.nom} : ${jx(n)}`, s:`${open} objectif${open>1?"s":""} non atteint${open>1?"s":""}`}); });
   // lâchés récents
-  trainees().filter(t=>t.lache && t.lache>=addDays(T0,-7)).forEach(t=>A.push({k:"info", v:"vols", t:`${t.nom} lâché le ${frDate(t.lache)}`, s:"Clôturer son dossier et l'ajouter en initiation"}));
+  trainees().filter(t=>t.lache && t.lache>=addDays(T0,-7)).forEach(t=>A.push({k:"info", v:"vols", t:`${t.nom} lâché le ${frDate(t.lache)}`, s:"Clôturer son dossier et l'ajouter en ab initio"}));
   const o = {crit:0,warn:1,info:2,ok:3};
   return A.sort((a,b)=>o[a.k]-o[b.k]);
 }
 
+/* ---------- annuaire pilotes + fiche ---------- */
+const PREFIX = ["EL","AIT","BEN","OULD","SABER","HADJ","AHMED","NAIT","SAID","BRAHAM","LABBACI"];
+function nameKey(n){
+  const w = norm(n).split(" ").filter(Boolean); if (!w.length) return "";
+  let i = 1; let sn = w[0];
+  if (PREFIX.includes(w[0]) && w.length>2) { sn = w[0]+" "+w[1]; i = 2; }
+  return sn + "|" + (w[i]||"").slice(0,3);
+}
+const keySur = k => k.split("|")[0];
+function sameP(p, nom, mat){
+  if (mat && p.mat && String(mat)===String(p.mat)) return true;
+  if (!nom) return false;
+  const a = nameKey(p.nom), b = nameKey(nom);
+  if (a===b) return true;
+  // un seul nom de famille d'un côté (ex. "Miloudi") : on accepte si le nom est unique dans l'annuaire
+  if (keySur(a)===keySur(b) && (!a.split("|")[1] || !b.split("|")[1])) return (surCount()[keySur(a)]||0) <= 1;
+  return false;
+}
+let _reg = null, _regSig = "";
+function registry(){
+  const sig = [st.ref.pilotes, st.instr, st.init, st.opl, st.max, st.valid, st.vols].map(x=>x?Object.keys(x).length:0).join(",") + JSON.stringify(Object.values(st.instr).map(x=>x.nom)) + ((st.ref.pilotes&&st.ref.pilotes.rows||[]).length);
+  if (_reg && sig===_regSig) return _reg;
+  const rows = ((st.ref.pilotes&&st.ref.pilotes.rows)||[]).map(p=>({...p}));
+  const have = (nom, mat) => rows.find(p=>(mat && p.mat && String(mat)===String(p.mat)) || nameKey(p.nom)===nameKey(nom));
+  const addV = (nom, mat, fonction) => { if (!nom || have(nom, mat)) return; rows.push({id:(mat||"v-"+norm(nom).toLowerCase().replace(/[^a-z0-9]+/g,"-")), nom, mat:mat||"", fonction:fonction||"", virtuel:true}); };
+  Object.values(st.opl).forEach(o=>addV(o.nom, o.matricule, "FO"));
+  Object.values(st.instr).forEach(o=>addV(o.nom, o.mat, o.pos));
+  Object.values(st.init).forEach(o=>addV(o.nom, o.mat, o.pos));
+  Object.values(st.max).forEach(o=>addV(o.nom, o.mat, o.pos));
+  Object.values(st.valid).forEach(o=>addV(o.nom, o.mat, o.fonction));
+  rows.sort((a,b)=>norm(a.nom).localeCompare(norm(b.nom)));
+  _reg = rows; _regSig = sig; _sur = null; return rows;
+}
+let _sur = null;
+function surCount(){ if (_sur) return _sur; _sur = {}; (_reg||[]).forEach(p=>{ const s = keySur(nameKey(p.nom)); _sur[s]=(_sur[s]||0)+1; }); return _sur; }
+const pilotById = id => registry().find(p=>p.id===id);
+
+function textHas(text, p){
+  const t = " "+norm(text)+" ", s = keySur(nameKey(p.nom)); if (!s) return false;
+  const i = t.indexOf(" "+s+" "); if (i<0) return false;
+  if ((surCount()[s]||0) <= 1) return true;
+  const after = t.slice(i+s.length+2).split(" ")[0]||"", first = (norm(p.nom).split(" ")[s.split(" ").length]||"");
+  return !!after && !!first && first.startsWith(after.slice(0,1)) && (after.length<3 || first.startsWith(after.slice(0,3)));
+}
+function simuFor(p){
+  const S = allSlots().filter(s=>textHas(s.crew,p) || textHas(s.instr,p));
+  const past = S.filter(s=>s.date<T0), fut = S.filter(s=>s.date>=T0);
+  return {last: past[past.length-1], next: fut[0], asTri: S.filter(s=>textHas(s.instr,p)).length, all:S};
+}
+function pilotInfo(p){
+  const find = (obj, fn) => Object.entries(obj).map(([id,d])=>({id,...d})).find(fn);
+  const opl = Object.values(st.opl).find(o=>sameP(p, o.nom, o.matricule));
+  const instr = find(st.instr, o=>sameP(p, o.nom, o.mat));
+  const init = find(st.init, o=>sameP(p, o.nom, o.mat));
+  const max = find(st.max, o=>sameP(p, o.nom, o.mat));
+  const valid = find(st.valid, o=>sameP(p, o.nom, o.mat));
+  const lic = lics().find(r=>sameP(p, r.nom, ""));
+  const safety = ((st.ref.equipes&&st.ref.equipes.safety)||[]).some(x=>sameP(p, x.nom, x.mat));
+  const cand = ((st.ref.equipes&&st.ref.equipes.candidatsTRI)||[]).find(x=>sameP(p, x.nom, ""));
+  const evaluateur = TRI().some(t=>sameP(p, t, ""));
+  const tri = evaluateur || ((st.ref.tri&&st.ref.tri.secteur)||[]).some(t=>sameP(p, t, ""));
+  const tr = trainees().find(t=>sameP(p, t.nom, t.id));
+  return {opl, instr, init, max, valid, lic, safety, cand, evaluateur, tri, tr};
+}
+function pilotStatus(p, I){
+  I = I || pilotInfo(p); const r = R();
+  if (I.instr && !I.instr.lache) { const L = legsOf(I.instr); return {t:`INSTR LIGNE ${L}/${r.legsLacher}`, c: L>=r.legsAlerte?"c-red":(L>=r.legsAlerte-6?"c-amb":"c-mag"), phase:"instr"}; }
+  if (I.init && (I.init.heures||0) < r.initHeures) return {t:`AB INITIO ${I.init.heures||0}H`, c:"c-amb", phase:"init"};
+  if (I.opl && inEval(I.opl) && (I.opl.evalsRestantes||0)>0) return {t:`${(I.opl.groupe||"OPL")==="CDB"?"EVAL CDB":(I.opl.groupe==="CIBLE"?"CIBLÉ":"EVAL")} ${faits(I.opl)}/${I.opl.total||r.evalsStd}`, c: evLevel(I.opl)==="crit"?"c-red":"c-mag", phase:"eval"};
+  if (I.opl && !inEval(I.opl)) return I.opl.checkLocal==="Instruction PL" ? {t:"INSTR PL", c:"c-mag", phase:"pl"} : {t:"CHECKS NAV/LOC", c:"c-mag", phase:"checks"};
+  if (I.max && !I.max.licenceOk) return {t:"FORMATION MAX", c:"c-cyn", phase:"max"};
+  return {t: I.tri?"TRI":"EN LIGNE", c: I.tri?"c-cyn":"c-grn", phase:"ligne"};
+}
+
+/* affectations depuis la fiche */
+async function assign(p, what){
+  const I = pilotInfo(p), mat = p.mat || "", key = mat || p.id;
+  const fn = p.fonction || "";
+  const base = {nom:p.nom, matricule:key, ordre:200+Object.keys(st.opl).length};
+  if (what==="instr") { if (I.instr) return go("lacher"); await add("instr", {nom:p.nom, mat, pos:fn==="CPT"?"CPT":"FO", legsInit:0, vols:[], preControle:"", cl:{requis:2,faits:0}, lache:""}, "Affecté en instruction ligne"); return; }
+  if (what==="init") { if (I.init) return go("init"); return put("init/"+key, {nom:p.nom, mat, pos:fn||"FO", heures:0, lacheLe:T0}, "Affecté en ab initio"); }
+  if (what==="pl") { if (I.opl) return upd("opl/"+I.opl.matricule, {checkLocal:"Instruction PL", checkNav:"Instruction PL", evalsRestantes:null}, "Passé en instruction PL");
+    return put("opl/"+key, {...base, checkLocal:"Instruction PL", checkNav:"Instruction PL", plHeures:0, plEtapes:0, exclus:[], programmes:[]}, "Affecté en instruction PL"); }
+  if (what==="checks") { if (I.opl) return upd("opl/"+I.opl.matricule, {checkLocal:"En attente", checkNav:"En attente"}, "Affecté aux checks nav et local");
+    return put("opl/"+key, {...base, checkLocal:"En attente", checkNav:"En attente", exclus:[], programmes:[]}, "Affecté aux checks nav et local"); }
+  if (what==="OPL" || what==="CDB" || what==="CIBLE") {
+    const tot = R().evalsStd, data = {groupe:what, total:tot, evalsRestantes: I.opl && inEval(I.opl) ? I.opl.evalsRestantes : tot, echeance: what==="CDB"?"2026-11-16":addDays(T0,30), checkLocal:"Validé", checkNav:"Validé"};
+    if (what==="CIBLE") Object.assign(data, {simuRequis:2, simuFaits:0, motif:"Approche instable"});
+    if (I.opl) return upd("opl/"+I.opl.matricule, data, "Affecté aux évaluations");
+    return put("opl/"+key, {...base, ...data, exclus:[], programmes:[]}, "Affecté aux évaluations"); }
+  if (what==="max") { if (I.max) return go("max"); return add("max", {nom:p.nom, mat, pos:fn||"", etape:"", licenceOk:false, suiviInforme:false, progInforme:false}, "Affecté à la formation MAX"); }
+  if (what==="valid") { if (I.valid) return go("valid"); return put("valid/"+key, {nom:p.nom, mat, fonction:fn, items:{}}, "Ajouté au suivi des validités"); }
+  if (what==="safety") { const E = st.ref.equipes||{}; const S = (E.safety||[]).slice();
+    const i = S.findIndex(x=>sameP(p, x.nom, x.mat)); if (i>=0) S.splice(i,1); else S.push({mat, nom:p.nom});
+    return upd("ref/equipes", {safety:S}, i>=0?"Retiré des safety pilots":"Ajouté aux safety pilots"); }
+}
+
+function vPilotes(){
+  const q = norm(F("pQ","")), f = F("pF","tous"), reg = registry();
+  const L = reg.map(p=>({p, I:pilotInfo(p)})).map(x=>({...x, s:pilotStatus(x.p, x.I)}))
+    .filter(x=>!q || norm(x.p.nom).includes(q) || String(x.p.mat).includes(q))
+    .filter(x=> f==="tous" || (f==="suivi" ? x.s.phase!=="ligne" : f==="cpt" ? x.p.fonction==="CPT" : f==="fo" ? x.p.fonction==="FO" : f==="safety" ? x.I.safety : f==="tri" ? x.I.tri : true));
+  const cnt = k => reg.filter(p=>pilotStatus(p).phase!=="ligne").length;
+  return `<section class="du cdu"><div class="du-t">Pilotes <span>${reg.length} au total</span></div>
+    <div class="sp"><b>NOM</b><input type="search" id="pQ" placeholder="Nom ou matricule" value="${esc(F("pQ",""))}" autocomplete="off"></div>
+    <div class="seg">${[["tous","Tous"],["suivi",`Suivis (${cnt()})`],["cpt","CPT"],["fo","FO"],["safety","Safety"],["tri","TRI"]].map(([k,l])=>`<button data-fset="pF" data-val="${k}" aria-pressed="${k===f}">${l}</button>`).join("")}</div>
+    <div>${L.slice(0,150).map(x=>lskRow(x.p, x.s)).join("") || `<div class="empty-state">Aucun pilote. Ajoute-le ci-dessous.</div>`}${L.length>150?`<div class="note">${L.length-150} autres : affine la recherche.</div>`:""}</div>
+    <form class="form" data-form="newpilot"><input type="text" id="npNom" class="grow" placeholder="NOM Prénom" required><input type="text" id="npMat" placeholder="Matricule" style="width:110px"><select id="npFn"><option>FO</option><option>CPT</option></select><button class="b pri" type="submit">Ajouter</button></form>
+    <div class="note">${esc((st.ref.pilotes&&st.ref.pilotes.source)||"Envoie-moi la liste complète des pilotes du secteur.")}</div></section>`;
+}
+function lskRow(p, s){
+  s = s || pilotStatus(p);
+  return `<button class="lsk" data-pilot="${esc(p.id)}"><span class="k"></span><span class="n">${esc(p.nom)}<small>${esc(p.fonction||"—")} · ${esc(p.mat||"sans matricule")}</small></span><span class="s ${s.c}">${esc(s.t)} ▸</span></button>`;
+}
+
+function vFiche(){
+  const p = pilotById(ui.pid); if (!p) return `<div class="empty-state">Pilote introuvable.</div>`;
+  const I = pilotInfo(p), r = R(), s = pilotStatus(p, I), sim = simuFor(p);
+  const steps = (p.fonction==="CPT" && !I.opl) ? [["instr","Instruction"],["pre","Pré-contrôle"],["cl","Check line"],["lache","Lâché"],["ligne","En ligne"]]
+    : [["pl","Instr. PL"],["dos","Dossier"],["checks","Checks"],["eval","Évals"],["instr","Instr. ligne"],["lache","Lâché"],["init","Ab initio"],["ligne","En ligne"]];
+  const done = new Set(), act = {};
+  const o = I.opl, ins = I.instr;
+  if (o) { if (o.checkLocal!=="Instruction PL") done.add("pl"); if (o.dossier==="Désigné" || o.checkLocal!=="Instruction PL") done.add("dos");
+    if (inEval(o)) done.add("checks"); if (inEval(o) && (o.evalsRestantes||0)===0) done.add("eval"); }
+  if (ins) { if (ins.preControle) done.add("pre"); if (ins.cl && ins.cl.faits>=(ins.cl.requis||2)) done.add("cl"); if (ins.lache) { done.add("instr"); done.add("lache"); done.add("pre"); done.add("cl"); } }
+  if (I.init) { done.add("lache"); done.add("instr"); if ((I.init.heures||0)>=r.initHeures) done.add("init"); }
+  const phaseMap = {pl:"pl", checks:"checks", eval:"eval", instr:"instr", init:"init", ligne:"ligne", max:"ligne"};
+  act[phaseMap[s.phase]] = true;
+  if (s.phase==="ligne") steps.forEach(([k])=>done.add(k));
+  const ro = (lbl, val, cls) => `<div class="kpi ${cls||""}"><span>${lbl}</span><b>${val}</b></div>`;
+  const clD = I.valid && I.valid.items && I.valid.items.CL, clLv = cellLevel(clD);
+  const licS = I.lic ? licStatus(I.lic) : null;
+  const L = ins ? legsOf(ins) : null;
+  const badges = [I.safety&&`<span class="pill ok">Safety pilot</span>`, I.evaluateur&&`<span class="pill info">TRI évaluateur</span>`, (I.tri&&!I.evaluateur)&&`<span class="pill info">TRI</span>`, I.cand&&`<span class="pill mag">Candidat TRI · ${esc(I.cand.statut||"")}</span>`, I.init&&(I.init.heures||0)<r.initHeures&&`<span class="pill warn">Ab initio</span>`, I.max&&`<span class="pill info">MAX</span>`].filter(Boolean).join(" ");
+  const key = (k, label, on, cls) => `<button class="b ${on?"okb":(cls||"")}" data-assign="${k}" data-pid="${esc(p.id)}">${on?"✓ ":""}${label}</button>`;
+  const warnAb = I.init && (I.init.heures||0) < r.initHeures;
+  return `
+  <section class="du"><div class="du-t">Fiche pilote <span>${esc(p.fonction||"")}</span></div>
+    <div class="idn"><div><div class="nm">${esc(p.nom)}</div><div class="mono">Matricule ${esc(p.mat||"—")}</div></div><div class="pill ${s.c==="c-red"?"crit":s.c==="c-amb"?"warn":s.c==="c-grn"?"ok":"mag"}">${esc(s.t)}</div></div>
+    ${badges?`<div class="row">${badges}</div>`:""}
+    <div class="fma">${steps.map(([k,l])=>`<div class="${act[k]?"act":(done.has(k)?"done":"")}">${l}</div>`).join("")}</div>
+    ${warnAb?`<div class="item warn"><div class="txt"><b>Ab initio : ${I.init.heures||0} h sur ${r.initHeures}</b><div class="sub">Ne doit jamais voler avec un autre ab initio.</div></div></div>`:""}
+    <div class="kpis">
+      ${ins?ro("Legs instruction", `${L}/${r.legsLacher}`, L>=r.legsAlerte?"crit":"mag"):""}
+      ${ins?ro("Pré-contrôle", ins.preControle?frDate(ins.preControle):"À faire", ins.preControle?"ok":"w"):""}
+      ${ins?ro("Check line", `${(ins.cl&&ins.cl.faits)||0}/${(ins.cl&&ins.cl.requis)||2}`, "w"):""}
+      ${ins&&ins.lache?ro("Lâché le", frDate(ins.lache), "ok"):""}
+      ${I.init?ro("Heures ab initio", `${I.init.heures||0}/${r.initHeures}`, (I.init.heures||0)>=r.initHeures?"ok":"warn"):""}
+      ${o&&inEval(o)?ro("Évaluations", `${faits(o)}/${o.total||r.evalsStd}`, evLevel(o)==="crit"?"crit":"mag"):""}
+      ${o&&!inEval(o)?ro("Check local", esc(o.checkLocal||"—"), o.checkLocal==="Validé"?"ok":"w"):""}
+      ${o&&!inEval(o)?ro("Check nav", esc(o.checkNav||"—"), o.checkNav==="Validé"?"ok":"w"):""}
+      ${o&&o.checkLocal==="Instruction PL"?ro("PL h / étapes", `${o.plHeures||0}/${o.plEtapes||0}`, "mag"):""}
+      ${ro("Dernier simu", sim.last?frDate(sim.last.date):"—", "w")}
+      ${ro("Prochain simu", sim.next?frDate(sim.next.date)+" S"+sim.next.s:"Aucun", sim.next?"mag":"w")}
+      ${ro("Line check", clD?frDate(clD):"Non saisi", clLv||"w")}
+      ${ro("Licence", I.lic?esc(I.lic.validite||"—"):"—", licS?licS.k:"w")}
+    </div>
+    ${o&&inEval(o)&&(o.exclus||[]).length?`<div class="note">TRI ayant déjà évalué : <span class="c-w">${(o.exclus||[]).map(esc).join(", ")}</span></div>`:""}
+    ${sim.next?`<div class="note">Prochaine séance : <span class="c-cyn">${dayLabel(sim.next.date)} S${sim.next.s} ${sim.next.h}</span> · ${esc(sim.next.instr||"TRI à trouver")} · ${esc(sim.next.crew||"")}</div>`:""}
+  </section>
+  <section class="du"><div class="du-t">Affecter à</div>
+    <div class="keys">
+      ${key("instr","Instruction ligne",!!ins)}
+      ${key("init","Ab initio",!!I.init)}
+      ${key("pl","Instruction PL",o&&o.checkLocal==="Instruction PL")}
+      ${key("checks","Checks nav et local",o&&!inEval(o)&&o.checkLocal!=="Instruction PL")}
+      ${key("OPL","Évaluation OPL",o&&inEval(o)&&(o.groupe||"OPL")==="OPL")}
+      ${key("CDB","Évaluation passage CDB",o&&o.groupe==="CDB")}
+      ${key("CIBLE","Entraînement ciblé",o&&o.groupe==="CIBLE")}
+      ${key("max","Formation MAX",!!I.max)}
+      ${key("valid","Suivi validités",!!I.valid)}
+      ${key("safety", I.safety?"Safety pilot (retirer)":"Safety pilot", false, I.safety?"crb":"")}
+    </div>
+    <div class="row">${ins?`<button class="b sm" data-go="lacher">Ouvrir Lâcher</button>`:""}${o?`<button class="b sm" data-go="${inEval(o)?"evals":"pl"}">Ouvrir ${inEval(o)?"Évals":"Instr. PL"}</button>`:""}${I.init?`<button class="b sm" data-go="init">Ouvrir Ab initio</button>`:""}${I.valid?`<button class="b sm" data-go="valid">Ouvrir Validités</button>`:""}</div>
+  </section>
+  ${(I.tr||sim.all.length)?`<section class="du"><div class="du-t">Activité</div>
+    ${sim.all.length?`<details><summary>Simulateur (${sim.all.length} séance${sim.all.length>1?"s":""}${sim.asTri?`, dont ${sim.asTri} comme TRI`:""})</summary><div class="prog" style="margin-top:6px">${sim.all.slice(-12).reverse().map(x=>`<div class="p"><span class="mono">${frDate(x.date)} S${x.s}</span><b>${esc(x.instr||"—")}</b><span class="mono">${esc(x.crew||"")}</span></div>`).join("")}</div></details>`:""}
+    ${I.tr?`<details><summary>Vols TrainerU (${I.tr.vols.length})</summary><div class="prog" style="margin-top:6px">${I.tr.vols.map(v=>`<div class="p"><span class="mono">${frDate(v.date)}</span><span class="pill ${v.code==="c"||v.code==="e"?"ok":(v.code==="v"||v.code==="p"?"info":"mute")}">${VCODE[v.code]||esc(v.libelle)}</span><b>${esc(v.instr.nom)}</b><span class="mono">${esc(v.vols)}</span></div>`).join("")}</div></details>`:""}
+  </section>`:""}`;
+}
+
 /* ================= VUES ================= */
 const MODULES = [
-  ["memos","Rappels","Mémos, tâches, projets"],["events","Objectifs","Événements et échéances"],
-  ["lacher","Lâcher","Legs, safety, check line"],["init","Initiation","< 150 h après lâcher"],
-  ["pl","Instr. PL","Heures, étapes, checks"],["evals","Évals","OPL, CDB, ciblé"],
-  ["simu","Simu","Planning, permutations"],["valid","Validités","CL, IC, IL, stages sol"],
-  ["max","MAX","Licences et infos"],["vols","Vols instr.","Exports TrainerU"],
-  ["equipes","Équipes","Safety, TRI, licences"],["dim","Effectif","Besoin en pilotes"],
-  ["moi","Mon temps","Gains, bureau, famille"],["regles","Règles","Manex D, seuils"]];
+  ["pilotes","Pilotes","Annuaire, fiches"],["lacher","Lâcher","Legs · safety · CL"],["init","Ab initio","< 150 h après lâcher"],
+  ["pl","Instr. PL","Heures · étapes · checks"],["evals","Évals","OPL · CDB · ciblé"],["simu","Simu","Planning · permut."],
+  ["valid","Validités","CL · IC · IL · sol"],["max","MAX","Licences"],["memos","Rappels","Mémos · tâches"],
+  ["events","Objectifs","Événements"],["vols","Vols instr.","TrainerU"],["equipes","Équipes","Safety · TRI · lic."],
+  ["dim","Effectif","180 / 180"],["moi","Mon temps","Gains · famille"],["regles","Règles","Manex D"]];
 
 function vHome(){
   const A = alerts();
-  const by = {}; A.forEach(a=>{ by[a.v]=by[a.v]||{crit:0,warn:0,info:0}; by[a.v][a.k]++; });
-  return `
-  <section class="panel" aria-label="Modules">${MODULES.map(([id,c,s])=>{ const x = by[id]||{}; const k = x.crit?"crit":(x.warn?"warn":"ok"); const n = (x.crit||0)+(x.warn||0);
-    return `<button class="ann ${k}" data-go="${id}"><span class="c">${c}</span><span class="s">${s}</span>${n?`<span class="k">${n}</span>`:""}</button>`;}).join("")}</section>
-  <section class="list">
-    <h2>Alarmes et rappels (${A.length})</h2>
-    ${A.length ? A.slice(0,18).map(a=>`<button class="item ${a.k}" data-go="${a.v}"><div class="txt"><div>${esc(a.t)}</div><div class="sub">${esc(a.s)}</div></div></button>`).join("")
-      + (A.length>18?`<div class="note">+ ${A.length-18} autres dans les modules (voyants allumés).</div>`:"")
-      : `<div class="item ok"><div class="txt">Tous les voyants sont éteints. Profite-en pour préparer le mois prochain.</div></div>`}
+  const by = {}; A.forEach(a=>{ by[a.v]=by[a.v]||{crit:0,warn:0,info:0,ok:0}; by[a.v][a.k]++; });
+  const q = norm(F("hQ","")), reg = registry();
+  let hits;
+  if (q) hits = reg.filter(p=>norm(p.nom).includes(q) || String(p.mat).includes(q)).slice(0,8);
+  else hits = reg.map(p=>({p,s:pilotStatus(p)})).filter(x=>x.s.c==="c-red"||x.s.c==="c-amb").slice(0,6).map(x=>x.p);
+  const nW = A.filter(a=>a.k==="crit").length, nC = A.filter(a=>a.k==="warn").length;
+  return `<div class="deck">
+  <section class="du" style="grid-area:eicas"><div class="du-t">EICAS <span>${nW} warning · ${nC} caution · ${A.length-nW-nC} memo</span></div>
+    <div class="eicas">${A.length ? A.slice(0,10).map(a=>`<button class="msgl ${a.k}" data-go="${a.v}"><span class="m">${esc(a.t)}<span class="d">${esc(a.s)}</span></span></button>`).join("")
+      + (A.length>10?`<div class="note">+ ${A.length-10} messages dans les modules (voyants allumés).</div>`:"")
+      : `<div class="msgl ok"><span class="m">Tous systèmes normaux</span></div>`}</div>
   </section>
-  ${quickMemo()}`;
+  <section class="du cdu" style="grid-area:cdu"><div class="du-t">Pilotes <span>${reg.length} en mémoire</span></div>
+    <div class="sp"><b>NOM</b><input type="search" id="hQ" placeholder="Chercher un pilote" value="${esc(F("hQ",""))}" autocomplete="off"></div>
+    <div>${hits.length?hits.map(p=>lskRow(p)).join(""):`<div class="note">${q?"Aucun pilote trouvé.":"Aucun pilote en alerte."}</div>`}</div>
+    ${!q && hits.length?`<div class="note">Pilotes à surveiller. Tape un nom pour chercher dans tout l'annuaire.</div>`:""}
+    <div class="row"><button class="b pri" data-go="pilotes">Liste complète ▸</button></div>
+  </section>
+  <section class="panel" style="grid-area:ovh" aria-label="Modules"><div class="panel-t">Overhead · modules</div>${MODULES.map(([id,c,s])=>{ const x = by[id]||{}; const k = x.crit?"crit":(x.warn?"warn":"ok"); const n = (x.crit||0)+(x.warn||0);
+    return `<button class="ann ${k}" data-go="${id}"><span class="c">${c}</span><span class="s">${s}</span><span class="lt"></span>${n?`<span class="k">${n}</span>`:""}</button>`;}).join("")}</section>
+  <section class="du" style="grid-area:memo"><div class="du-t">Scratchpad · nouveau mémo</div>${quickMemo()}</section>
+  </div>`;
 }
+
 function quickMemo(){
   return `<form class="form" data-form="memo">
     <input type="text" id="mTxt" class="grow" placeholder="Nouveau mémo : ex. réunion de standardisation à programmer" required>
@@ -476,7 +713,7 @@ function vLacher(){
         <button class="b sm" data-lq="${p.id}" data-act="pre">${p.preControle?"Annuler pré-contrôle":"Pré-contrôle fait"}</button>
         <button class="b sm" data-lq="${p.id}" data-act="clreq">CL en ${((p.cl&&p.cl.requis)||2)===2?4:2} étapes</button>
         <button class="b sm" data-lq="${p.id}" data-act="cl" ${L<r.legsLacher?"disabled":""}>+ étape CL</button>
-        <button class="b sm okb" data-lq="${p.id}" data-act="lache" ${((p.cl&&p.cl.faits)||0)>=((p.cl&&p.cl.requis)||2)?"":"disabled"}>Lâché → initiation</button></div>`}
+        <button class="b sm okb" data-lq="${p.id}" data-act="lache" ${((p.cl&&p.cl.faits)||0)>=((p.cl&&p.cl.requis)||2)?"":"disabled"}>Lâché → ab initio</button></div>`}
       <div class="row"><button class="b sm crb" data-dellacher="${p.id}">Retirer</button></div>
     </article>`;}).join("")}</section>`:`<div class="empty-state">Envoie-moi le programme des CPT et FO en instruction (avec qui, sur quels vols) : je compte les legs, je vérifie le safety pilot des 4 premiers legs et j'allume l'alarme à 36 legs.</div>`}`;
 }
@@ -484,14 +721,14 @@ function vLacher(){
 /* --- Initiation --- */
 function vInit(){
   const r = R(), P = Object.entries(st.init).map(([id,d])=>({id,...d})).sort((a,b)=>(a.heures||0)-(b.heures||0));
-  return `<div class="item warn"><div class="txt"><b>Deux pilotes en initiation ne volent jamais ensemble.</b><div class="sub">Initiation : moins de ${r.initHeures} h après le lâcher. Vérifie les équipages avec la recherche ci-dessous.</div></div></div>
-  <form class="form" data-form="init"><input type="text" id="iNom" class="grow" placeholder="Pilote en initiation" required><select id="iPos"><option>FO</option><option>CPT</option></select><label>Heures après lâcher<input type="number" id="iH" min="0" value="0"></label><button class="b pri" type="submit">Ajouter</button></form>
+  return `<div class="item warn"><div class="txt"><b>Deux pilotes ab initio ne volent jamais ensemble.</b><div class="sub">Ab initio : moins de ${r.initHeures} h après le lâcher. Vérifie les équipages avec la recherche ci-dessous.</div></div></div>
+  <form class="form" data-form="init"><input type="text" id="iNom" class="grow" placeholder="Pilote ab initio" required><select id="iPos"><option>FO</option><option>CPT</option></select><label>Heures après lâcher<input type="number" id="iH" min="0" value="0"></label><button class="b pri" type="submit">Ajouter</button></form>
   ${P.length>1?`<form class="form" data-form="pair"><span class="note">Contrôle d'équipage :</span><select id="pA">${P.map(p=>`<option>${esc(p.nom)}</option>`).join("")}</select><span>+</span><input type="text" id="pB" placeholder="Autre membre d'équipage" class="grow"><button class="b" type="submit">Vérifier</button></form>`:""}
   ${P.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Progression</th><th></th></tr></thead><tbody>${P.map(p=>{ const pc = Math.min(100,Math.round((p.heures||0)/r.initHeures*100));
     return `<tr><td><b>${esc(p.nom)}</b><div class="mono">${esc(p.pos||"")}${p.lacheLe?" · lâché "+frDate(p.lacheLe):""}</div></td>
     <td><input type="number" min="0" value="${p.heures||0}" data-inith="${p.id}" aria-label="Heures"></td>
     <td style="min-width:120px"><div class="gauge ${pc>=100?"ok":""}"><i style="width:${pc}%"></i></div><span class="note">${Math.max(0,r.initHeures-(p.heures||0))} h restantes</span></td>
-    <td><button class="b sm" data-delinit="${p.id}">✕</button></td></tr>`;}).join("")}</tbody></table></div>`:`<div class="empty-state">Envoie-moi la liste des pilotes en initiation (heures depuis le lâcher). Les pilotes lâchés depuis l'onglet Lâcher arrivent ici tout seuls.</div>`}`;
+    <td><button class="b sm" data-delinit="${p.id}">✕</button></td></tr>`;}).join("")}</tbody></table></div>`:`<div class="empty-state">Envoie-moi la liste des pilotes ab initio (heures depuis le lâcher). Les pilotes lâchés depuis l'onglet Lâcher arrivent ici tout seuls.</div>`}`;
 }
 
 /* --- Instruction PL & checks --- */
@@ -714,32 +951,38 @@ function vRegles(){
   const r = R(); const fld = (k,l) => `<label>${l}<input type="number" min="0" value="${r[k]}" data-regle="${k}"></label>`;
   return `<div class="item ${r.manexConfirme?"ok":"warn"}"><div class="txt"><b>${r.manexConfirme?"Règles confirmées avec le Manex D":"Règles à confirmer avec le Manex D"}</b><div class="sub">Envoie-moi le Manex D : je vérifie chaque seuil, ainsi que les conditions pour être safety pilot.</div></div></div>
   <div class="card"><h3>Lâcher en ligne</h3><div class="row">${fld("legsLacher","Legs pour le lâcher")}${fld("legsAlerte","Alarme à (legs)")}${fld("legsSafety","Legs avec safety pilot")}</div></div>
-  <div class="card"><h3>Instruction PL et initiation</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Initiation : heures")}</div></div>
+  <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div></div>
   <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}</div>
     <label class="note">Types de validités (séparés par des virgules)<input type="text" id="vtypes" value="${esc(r.validTypes.join(", "))}"></label><div class="row"><button class="b sm pri" data-vtypes="1">Enregistrer les types</button></div></div>`;
 }
 
 /* ================= RENDU ================= */
-const TITLES = Object.fromEntries(MODULES.map(([id,c])=>[id,c]));
+const TITLES = {...Object.fromEntries(MODULES.map(([id,c])=>[id,c])), fiche:"Fiche pilote"};
 function render(){
   const all = COLS.every(c=>st.loaded[c]);
   $("#back").hidden = ui.view==="home";
-  $("#ttl").innerHTML = ui.view==="home" ? `FTM Desk<small>B737 NG/MAX</small>` : esc(TITLES[ui.view]||"");
+  $("#ttl").textContent = ui.view==="home" ? "FTM Desk · B737" : (TITLES[ui.view]||"");
   if (st.dbFailed) { $("#view").innerHTML = `<div class="empty-state">Ouvre cette page depuis claude.ai, connecté à ton compte, pour voir et modifier tes données.</div>`; return; }
   if (!all) return;
+  const AL = alerts(), nw = AL.filter(x=>x.k==="crit").length, nc = AL.filter(x=>x.k==="warn").length;
+  $("#mw").classList.toggle("on", nw>0); $("#mc").classList.toggle("on", nc>0); $("#mwn").textContent = nw||""; $("#mcn").textContent = nc||"";
   const a = document.activeElement, fid = a && a.id, pos = fid && a.selectionStart;
   if (a && a.tagName==="TEXTAREA") return;  // ne pas écraser une saisie longue en cours
-  $("#view").innerHTML = ({home:vHome, memos:vMemos, events:vEvents, lacher:vLacher, init:vInit, pl:vPL, evals:vEvals, simu:vSimu, valid:vValid, max:vMax, equipes:vEquipes, vols:vVols, dim:vDim, moi:vMoi, regles:vRegles}[ui.view]||vHome)();
+  $("#view").innerHTML = ({home:vHome, pilotes:vPilotes, fiche:vFiche, memos:vMemos, events:vEvents, lacher:vLacher, init:vInit, pl:vPL, evals:vEvals, simu:vSimu, valid:vValid, max:vMax, equipes:vEquipes, vols:vVols, dim:vDim, moi:vMoi, regles:vRegles}[ui.view]||vHome)();
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos);}catch(e){} } }
 }
 function go(v){ ui.view=v; ui.form={}; try{localStorage.setItem("ftm.view",v);}catch(e){} render(); window.scrollTo(0,0); }
-$("#back").addEventListener("click", ()=>go("home"));
+$("#back").addEventListener("click", ()=>go(ui.view==="fiche" && ui.from ? ui.from : "home"));
+$("#mw").addEventListener("click", ()=>go("home")); $("#mc").addEventListener("click", ()=>go("home"));
+function openPilot(id){ ui.from = ui.view==="fiche" ? ui.from : ui.view; ui.pid = id; try{ localStorage.setItem("ftm.pid", id); }catch(e){} go("fiche"); }
 
 const V = $("#view");
 const val = id => (document.getElementById(id)||{}).value;
 V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
+  if (d.pilot) return openPilot(d.pilot);
+  if (d.assign) { const p = pilotById(d.pid); if (p) await assign(p, d.assign); return; }
   if (d.fset) { ui.f[d.fset]=d.val; return render(); }
   if (d.openform) { ui.form[d.openform]=true; return render(); }
   if (d.closeform) { delete ui.form[d.closeform]; return render(); }
@@ -774,10 +1017,10 @@ V.addEventListener("click", async e=>{
     if (d.act==="pre") return upd("instr/"+d.lq, {preControle: p.preControle?"":T0}, p.preControle?"Pré-contrôle annulé":"Pré-contrôle enregistré");
     if (d.act==="clreq") return upd("instr/"+d.lq, {cl:{...cl, requis: cl.requis===2?4:2}});
     if (d.act==="cl") return upd("instr/"+d.lq, {cl:{...cl, faits: Math.min(cl.requis, cl.faits+1)}}, "Étape CL enregistrée");
-    if (d.act==="lache") { await upd("instr/"+d.lq, {lache:T0}); return add("init", {nom:p.nom, pos:p.pos||"", heures:0, lacheLe:T0}, `${p.nom} lâché, ajouté en initiation`); } }
+    if (d.act==="lache") { await upd("instr/"+d.lq, {lache:T0}); return add("init", {nom:p.nom, pos:p.pos||"", heures:0, lacheLe:T0}, `${p.nom} lâché, ajouté en ab initio`); } }
   if (d.delvol) { const p = st.instr[d.delvol]; return upd("instr/"+d.delvol, {vols:(p.vols||[]).filter(v=>v.id!==d.vid)}, "Vol retiré"); }
   if (d.dellacher) return del("instr/"+d.dellacher, "Pilote retiré");
-  if (d.delinit) return del("init/"+d.delinit, "Retiré de l'initiation");
+  if (d.delinit) return del("init/"+d.delinit, "Retiré des ab initio");
   // validités, max, mémos, événements
   if (d.cell) { ui.form.cell = d.cell; return render(); }
   if (d.delvalid) return del("valid/"+d.delvalid, "Pilote retiré");
@@ -808,9 +1051,14 @@ V.addEventListener("change", e=>{
   if (d.moiobj) { const p = Object.assign({objectifs:{}}, st.perso.moi||{}); put("perso/moi", {...p, objectifs:{...p.objectifs, [d.moiobj]:+t.value||0}}); }
   if (d.moitxt) { const p = Object.assign({}, st.perso.moi||{}); put("perso/moi", {...p, [d.moitxt]:t.value}, "Enregistré"); }
 });
-V.addEventListener("input", e=>{ const id = e.target.id; if (["vQ","eqQ","volQ"].includes(id)) { ui.f[id]=e.target.value; render(); } });
+V.addEventListener("input", e=>{ const id = e.target.id; if (["vQ","eqQ","volQ","hQ","pQ"].includes(id)) { ui.f[id]=e.target.value; render(); } });
 V.addEventListener("submit", async e=>{
   e.preventDefault(); const f = e.target, k = f.dataset.form;
+  if (k==="newpilot") { const nom = val("npNom").trim(), mat = val("npMat").trim(); if (!nom) return;
+    const rows = ((st.ref.pilotes&&st.ref.pilotes.rows)||[]).slice();
+    if (rows.some(p=>(mat && p.mat===mat) || nameKey(p.nom)===nameKey(nom))) return toast("Ce pilote existe déjà.");
+    rows.push({id: mat || "p-"+norm(nom).toLowerCase().replace(/[^a-z0-9]+/g,"-"), nom, mat, fonction:val("npFn"), sources:["Ajout manuel"]});
+    return put("ref/pilotes", {...(st.ref.pilotes||{}), rows}, "Pilote ajouté"); }
   if (k==="memo") { const txt = val("mTxt").trim(); if (!txt) return; return add("memos", {texte:txt, echeance:val("mDate")||"", source:val("mSrc"), horizon:val("mHor"), cat:val("mCat"), fait:false, cree:T0}, "Mémo ajouté"); }
   if (k==="event") return add("events", {nom:val("eNom").trim(), date:val("eDate"), objectifs:[]}, "Événement créé");
   if (k==="obj") { const id = f.dataset.eid, e2 = st.events[id]; return upd("events/"+id, {objectifs:[...(e2.objectifs||[]), {id:uid("o"), texte:val("o-"+id).trim(), date:val("od-"+id)||"", fait:false}]}, "Objectif ajouté"); }
@@ -823,9 +1071,9 @@ V.addEventListener("submit", async e=>{
   if (k==="lacher") return add("instr", {nom:val("lNom").trim(), pos:val("lPos"), legsInit:+val("lLegs")||0, vols:[], preControle:"", cl:{requis:2,faits:0}, lache:""}, "Pilote ajouté");
   if (k==="vol") { const id = f.dataset.pid, p = st.instr[id]; delete ui.form["v"+id];
     return upd("instr/"+id, {vols:[...(p.vols||[]), {id:uid("v"), date:val("vd-"+id), instr:val("vi-"+id), vols:val("vv-"+id), legs:+val("vl-"+id)||2, safety:val("vs-"+id)||""}]}, "Vol enregistré"); }
-  if (k==="init") return add("init", {nom:val("iNom").trim(), pos:val("iPos"), heures:+val("iH")||0, lacheLe:""}, "Ajouté en initiation");
+  if (k==="init") return add("init", {nom:val("iNom").trim(), pos:val("iPos"), heures:+val("iH")||0, lacheLe:""}, "Ajouté en ab initio");
   if (k==="pair") { const a = val("pA"), b = norm(val("pB")); const hit = Object.values(st.init).find(p=>surname(p.nom)===surname(b) && norm(p.nom)!==norm(a));
-    return toast(hit ? `Interdit : ${a} et ${hit.nom} sont tous les deux en initiation.` : "OK : l'autre membre n'est pas en initiation."); }
+    return toast(hit ? `Interdit : ${a} et ${hit.nom} sont tous les deux ab initio.` : "OK : l'autre membre n'est pas ab initio."); }
   if (k==="slot") { const [m,ji,si] = f.dataset.key.split("|"); const s = st.simu[m].jours[ji].slots[si], ni = val("sl-i").trim(), nc = val("sl-c").trim(); delete ui.form.slot;
     const ch = []; if (ni!==(s.instr||"")) ch.push(`TRI ${s.instr||"(vide)"} → ${ni||"(vide)"}`); if (nc!==(s.crew||"")) ch.push(`équipage ${s.crew||"(vide)"} → ${nc||"(vide)"}`);
     if (!ch.length) return render(); return setSlot(m,+ji,+si,{instr:ni, crew:nc}, `${dayLabel(st.simu[m].jours[ji].date)} S${s.s} : ${ch.join(" ; ")}`); }

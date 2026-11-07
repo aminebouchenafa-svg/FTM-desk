@@ -17,6 +17,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 - `valid/*` : validités {nom, fonction, items{CL, IC, IL, Check TRI, CRM, DGR, SMS, Sûreté, SSP1, SSP2: date d'expiration AAAA-MM-JJ}}.
 - `max/*` : formation MAX {nom, pos, etape, licenceOk, suiviInforme, progInforme}.
 - `simulog/*` : changements simu à notifier au CSV Kouba {date, texte, notifie}.
+- `ref/pilotes` : annuaire {rows[{id, nom, mat, fonction CPT|FO, sources}]} ; la fiche pilote relie les modules par matricule, sinon par NOM + 3 lettres du prénom.
 - `ref/regles` (seuils modifiables), `ref/dim` (dimensionnement), `perso/moi` (mon temps).
 - Dans `opl`, `groupe` = OPL | CDB | CIBLE ; `total` évals ; programmes statut programmé | fait | raté (+ cause CGML, ABS, IRGAV, AMP, ABSTRI, SOLL).
 - Cahier des charges complet : `CAHIER_DES_CHARGES.md`.
@@ -33,3 +34,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 Aucun pilote ne fait deux vols d'évaluation avec le même TRI (règle confirmée par le FTM).
 Des vols du même TRI sur des jours consécutifs = une seule rotation, donc une seule éval.
 Un même TRI sur des jours non consécutifs pour un même OPL = infraction à signaler.
+
+## Interface
+Thème cockpit unique (nuit) : EICAS, CDU de recherche pilote, overhead de modules, fiche pilote avec « Affecter à ».
+Briefing push chaque matin à 06:44 (Alger) : tâche planifiée « Briefing FTM Desk » (lecture seule de la base).
