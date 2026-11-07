@@ -38,5 +38,5 @@ Des vols du même TRI sur des jours consécutifs = une seule rotation, donc une 
 Un même TRI sur des jours non consécutifs pour un même OPL = infraction à signaler.
 
 ## Interface
-Thème cockpit unique (nuit) : EICAS, CDU de recherche pilote, overhead de modules, fiche pilote avec « Affecter à ».
+Thème violet façon captures du FTM : mode jour (lavande) et mode nuit (indigo étoilé), bouton soleil/lune (localStorage ftm.theme), police Poppins, boutons en dégradé indigo→violet. Fiche pilote avec interrupteurs d'affectation.
 Briefing push chaque matin à 06:44 (Alger) : tâche planifiée « Briefing FTM Desk » (lecture seule de la base).
