@@ -560,14 +560,16 @@ function vFiche(){
       ${ins&&ins.lache?ro("Lâché le", frDate(ins.lache), "ok"):""}
       ${I.init?ro("Heures ab initio", `${I.init.heures||0}/${r.initHeures}`, (I.init.heures||0)>=r.initHeures?"ok":"warn"):""}
       ${o&&inEval(o)?ro("Évaluations", `${faits(o)}/${o.total||r.evalsStd}`, evLevel(o)==="crit"?"crit":"mag"):""}
-      ${o&&!inEval(o)?ro("Check local", esc(o.checkLocal||"—"), o.checkLocal==="Validé"?"ok":"w"):""}
-      ${o&&!inEval(o)?ro("Check nav", esc(o.checkNav||"—"), o.checkNav==="Validé"?"ok":"w"):""}
       ${o&&o.checkLocal==="Instruction PL"?ro("PL h / étapes", `${o.plHeures||0}/${o.plEtapes||0}`, "mag"):""}
       ${ro("Dernier simu", sim.last?frDate(sim.last.date):"—", "w")}
       ${ro("Prochain simu", sim.next?frDate(sim.next.date)+" S"+sim.next.s:"Aucun", sim.next?"mag":"w")}
       ${ro("Line check", clD?frDate(clD):"Non saisi", clLv||"w")}
       ${ro("Licence", I.lic?esc(I.lic.validite||"—"):"—", licS?licS.k:"w")}
     </div>
+    ${o&&!inEval(o)&&o.checkLocal!=="Instruction PL"?`<div class="list">${[["checkLocal","Check local (vol local)"],["checkNav","Check nav"]].map(([f,l])=>{ const v = o[f]||"En attente", ok = v==="Validé", dt = o[f+"Date"];
+      return `<div class="item ${ok?"ok":"warn"}"><div class="txt"><b>${l}</b><div class="sub">${ok?"Validé"+(dt?" le "+frDate(dt):""):esc(v)}</div></div>
+      ${ok?`<button class="b sm" data-chk="${o.matricule}" data-f="${f}" data-undo="1">Annuler</button>`:`<input type="date" id="cd-${f}" value="${T0}" aria-label="Date du ${l}"><button class="b sm okb" data-chk="${o.matricule}" data-f="${f}">Valider</button>`}</div>`;}).join("")}</div>
+      ${o.checkLocal==="Validé"&&o.checkNav==="Validé"?`<button class="b pri" data-toeval="${o.matricule}">Checks validés : passer en évaluations ▸</button>`:""}`:""}
     ${o&&inEval(o)&&(o.exclus||[]).length?`<div class="note">TRI ayant déjà évalué : <span class="c-w">${(o.exclus||[]).map(esc).join(", ")}</span></div>`:""}
     ${sim.next?`<div class="note">Prochaine séance : <span class="c-cyn">${dayLabel(sim.next.date)} S${sim.next.s} ${sim.next.h}</span> · ${esc(sim.next.instr||"TRI à trouver")} · ${esc(sim.next.crew||"")}</div>`:""}
   </section>
@@ -982,6 +984,8 @@ V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.pilot) return openPilot(d.pilot);
+  if (d.chk) return d.undo ? upd("opl/"+d.chk, {[d.f]:"En attente", [d.f+"Date"]:""}, "Check remis en attente")
+    : upd("opl/"+d.chk, {[d.f]:"Validé", [d.f+"Date"]: val("cd-"+d.f)||T0}, (d.f==="checkNav"?"Check nav":"Check local")+" validé");
   if (d.assign) { const p = pilotById(d.pid); if (p) await assign(p, d.assign); return; }
   if (d.fset) { ui.f[d.fset]=d.val; return render(); }
   if (d.openform) { ui.form[d.openform]=true; return render(); }
@@ -1037,7 +1041,7 @@ V.addEventListener("change", e=>{
   const t = e.target, d = t.dataset;
   if (t.id && t.id.startsWith("tri-")) ui.form[t.id.slice(4)].tri = t.value;
   if (t.id && t.id.startsWith("date-")) ui.form[t.id.slice(5)].date = t.value;
-  if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value}, "Statut mis à jour");
+  if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
   if (d.plf) upd("opl/"+d.plf, {[d.k]:+t.value||0});
   if (d.dos!=null && d.dos!=="") upd("opl/"+d.dos, {dossier:t.value}, "Dossier mis à jour");
   if (d.memo) upd("memos/"+d.memo, {fait:t.checked});
