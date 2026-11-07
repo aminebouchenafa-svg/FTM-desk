@@ -18,6 +18,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 - `max/*` : formation MAX {nom, pos, etape, licenceOk, suiviInforme, progInforme}.
 - `simulog/*` : changements simu à notifier au CSV Kouba {date, texte, notifie}.
 - `ref/pilotes` : annuaire {rows[{id, nom, mat, fonction CPT|FO, sources}]} ; la fiche pilote relie les modules par matricule, sinon par NOM + 3 lettres du prénom.
+- `fiches/<id pilote>` : saisies manuelles de la fiche {dernierSimu, prochainSimu, licence, note} (prioritaires sur le planning).
 - `ref/regles` (seuils modifiables), `ref/dim` (dimensionnement), `perso/moi` (mon temps).
 - Dans `opl`, `groupe` = OPL | CDB | CIBLE ; `total` évals ; programmes statut programmé | fait | raté (+ cause CGML, ABS, IRGAV, AMP, ABSTRI, SOLL).
 - Cahier des charges complet : `CAHIER_DES_CHARGES.md`.
