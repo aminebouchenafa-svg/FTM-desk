@@ -387,6 +387,11 @@ function alerts(){
     pending(o).forEach(p=>{ if (p.date && p.date < T0) A.push({k:"warn", v:"evals", t:`${o.nom} : éval avec ${p.tri} du ${frDate(p.date)}`, s:"Date passée : marque-la faite, ou ratée avec la cause"}); });
     if (o.simuRequis && (o.simuFaits||0) < o.simuRequis) A.push({k:"warn", v:"evals", t:`${o.nom} : ${o.simuRequis-(o.simuFaits||0)} simu(s) d'entraînement ciblé à faire`, s:o.motif||""});
   });
+  // collège passage CDB et QT ATR
+  ev().forEach(o=>{ if (!evalsDone(o)) return; const p = registry().find(x=>sameP(x, o.nom, o.matricule)); if (p && isOut(p)) return;
+    const c = o.college||{}, cd = c.date||COLLEGE_DATE;
+    if (!c.resultat && cd < T0) A.push({k:"warn", v:"pilotes", t:`${o.nom} : résultat du collège à saisir`, s:`Collège du ${frDate(cd)}`});
+    if (c.resultat==="Admis" && c.qtDate && c.qtDate <= T0) A.push({k:"info", v:"pilotes", t:`${o.nom} : parti en QT ATR le ${frDate(c.qtDate)}`, s:"Le retirer du secteur depuis sa fiche"}); });
   // même TRI deux fois
   const triOf = n => TRI().find(t=>norm(n).startsWith(norm(t))) || surname(n);
   ev().forEach(o=>{
@@ -493,8 +498,17 @@ function pilotInfo(p){
   const tr = trainees().find(t=>sameP(p, t.nom, t.id));
   return {opl, instr, init, max, valid, lic, safety, cand, evaluateur, tri, tr};
 }
+const isOut = p => !!(st.fiches[p.id] && st.fiches[p.id].sorti);
+const activeReg = () => registry().filter(p=>!isOut(p));
+const COLLEGE_DATE = "2026-11-16";
+const evalsDone = o => o && inEval(o) && (o.evalsRestantes||0)===0 && o.groupe!=="CIBLE";
 function pilotStatus(p, I){
+  if (isOut(p)) { const so = st.fiches[p.id].sorti; return {t:`SORTI · ${so.motif||""}`.toUpperCase(), c:"c-dim", phase:"sorti"}; }
   I = I || pilotInfo(p); const r = R();
+  if (evalsDone(I.opl)) { const c = I.opl.college||{};
+    if (c.resultat==="Admis") return {t:"ADMIS CDB · QT ATR", c:"c-grn", phase:"qt"};
+    if (c.resultat==="Ajourné") return {t:"AJOURNÉ AU COLLÈGE", c:"c-amb", phase:"college"};
+    return {t:"COLLÈGE CDB "+frDate(c.date||COLLEGE_DATE).slice(0,5), c:"c-mag", phase:"college"}; }
   if (I.instr && !I.instr.lache) { const L = legsOf(I.instr); return {t:`INSTR LIGNE ${L}/${r.legsLacher}`, c: L>=r.legsAlerte?"c-red":(L>=r.legsAlerte-6?"c-amb":"c-mag"), phase:"instr"}; }
   if (I.init && (I.init.heures||0) < r.initHeures) return {t:`AB INITIO ${I.init.heures||0}H`, c:"c-amb", phase:"init"};
   if (I.opl && inEval(I.opl) && (I.opl.evalsRestantes||0)>0) return {t:`${(I.opl.groupe||"OPL")==="CDB"?"EVAL CDB":(I.opl.groupe==="CIBLE"?"CIBLÉ":"EVAL")} ${faits(I.opl)}/${I.opl.total||r.evalsStd}`, c: evLevel(I.opl)==="crit"?"c-red":"c-mag", phase:"eval"};
@@ -533,14 +547,15 @@ async function assign(p, what){
 }
 
 function vPilotes(){
-  const q = norm(F("pQ","")), f = F("pF","tous"), reg = registry();
+  const q = norm(F("pQ","")), f = F("pF","tous"), reg = f==="sortis" ? registry().filter(isOut) : activeReg();
   const L = reg.map(p=>({p, I:pilotInfo(p)})).map(x=>({...x, s:pilotStatus(x.p, x.I)}))
     .filter(x=>!q || norm(x.p.nom).includes(q) || String(x.p.mat).includes(q))
-    .filter(x=> f==="tous" || (f==="suivi" ? x.s.phase!=="ligne" : f==="cpt" ? x.p.fonction==="CPT" : f==="fo" ? x.p.fonction==="FO" : f==="safety" ? x.I.safety : f==="tri" ? x.I.tri : true));
-  const cnt = k => reg.filter(p=>pilotStatus(p).phase!=="ligne").length;
-  return `<section class="du cdu"><div class="du-t">Pilotes <span>${reg.length} au total</span></div>
+    .filter(x=> f==="tous" || (f==="suivi" ? x.s.phase!=="ligne" : f==="cpt" ? x.p.fonction==="CPT" : f==="fo" ? x.p.fonction==="FO" : f==="safety" ? x.I.safety : f==="tri" ? x.I.tri : f==="college" ? (x.s.phase==="college"||x.s.phase==="qt") : true));
+  const cnt = () => activeReg().filter(p=>pilotStatus(p).phase!=="ligne").length;
+  const nCol = activeReg().filter(p=>["college","qt"].includes(pilotStatus(p).phase)).length, nOut = registry().filter(isOut).length;
+  return `<section class="du cdu"><div class="du-t">Pilotes <span>${activeReg().length} dans le secteur</span></div>
     <div class="sp"><b>NOM</b><input type="search" id="pQ" placeholder="Nom ou matricule" value="${esc(F("pQ",""))}" autocomplete="off"></div>
-    <div class="seg">${[["tous","Tous"],["suivi",`Suivis (${cnt()})`],["cpt","CPT"],["fo","FO"],["safety","Safety"],["tri","TRI"]].map(([k,l])=>`<button data-fset="pF" data-val="${k}" aria-pressed="${k===f}">${l}</button>`).join("")}</div>
+    <div class="seg">${[["tous","Tous"],["suivi",`Suivis (${cnt()})`],["cpt","CPT"],["fo","FO"],["safety","Safety"],["tri","TRI"],["college",`Collège / QT (${nCol})`],["sortis",`Sortis (${nOut})`]].map(([k,l])=>`<button data-fset="pF" data-val="${k}" aria-pressed="${k===f}">${l}</button>`).join("")}</div>
     <div>${L.slice(0,150).map(x=>lskRow(x.p, x.s)).join("") || `<div class="empty-state">Aucun pilote. Ajoute-le ci-dessous.</div>`}${L.length>150?`<div class="note">${L.length-150} autres : affine la recherche.</div>`:""}</div>
     <form class="form" data-form="newpilot"><input type="text" id="npNom" class="grow" placeholder="NOM Prénom" required><input type="text" id="npMat" placeholder="Matricule" style="width:110px"><select id="npFn"><option>FO</option><option>CPT</option></select><button class="b pri" type="submit">Ajouter</button></form>
     <div class="note">${esc((st.ref.pilotes&&st.ref.pilotes.source)||"Envoie-moi la liste complète des pilotes du secteur.")}</div></section>`;
@@ -577,10 +592,13 @@ function vFiche(){
   const I = pilotInfo(p), r = R(), s = pilotStatus(p, I), sim = simuFor(p), fx = st.fiches[p.id] || {};
   const o = I.opl, ins = I.instr, os = oplState(o);
   /* parcours */
-  const steps = [["pl","Instr. PL"],["local","Check local"],["nav","Check nav"],["eval","Évals"],["instr","Instr. ligne"],["lache","Lâché"],["init","Ab initio"],["ligne","En ligne"]];
-  const order = {pl:0, checks:1, eval:3, instr:4, init:6, ligne:7, max:7};
-  const cur = order[s.phase] ?? 7;
+  const upg = !!o;
+  const steps = upg ? [["pl","Instr. PL"],["local","Check local"],["nav","Check nav"],["eval","Évals"],["college","Collège CDB"],["qt","QT ATR"]]
+                    : [["instr","Instr. ligne"],["lache","Lâché"],["init","Ab initio"],["ligne","En ligne"]];
+  const order = upg ? {pl:0, checks:1, eval:3, college:4, qt:5, sorti:6, ligne:6} : {instr:0, init:2, ligne:3, max:3, sorti:4};
+  const cur = order[s.phase] ?? steps.length;
   const stepCls = (k,i) => {
+    if (k==="college" && o && o.college && o.college.resultat==="Ajourné") return "act";
     if (s.phase==="checks" && (k==="local"||k==="nav")) { const v = o[k==="local"?"checkLocal":"checkNav"]; return v==="Validé"?"done":(chkPending(v)?"act":""); }
     return i===cur?"act":(i<cur?"done":""); };
   /* valeurs auto (planning) et saisies */
@@ -625,7 +643,8 @@ function vFiche(){
     ${ins && !ins.lache?`<div class="row"><button class="b sm ${ins.preControle?"okb":""}" data-lq="${ins.id}" data-act="pre">${ins.preControle?"✓ Pré-contrôle "+frDate(ins.preControle):"Pré-contrôle fait"}</button>
       <button class="b sm" data-lq="${ins.id}" data-act="cl" ${L<r.legsLacher?"disabled":""}>+ étape CL (${(ins.cl&&ins.cl.faits)||0}/${(ins.cl&&ins.cl.requis)||2})</button>
       <button class="b sm okb" data-lq="${ins.id}" data-act="lache" ${((ins.cl&&ins.cl.faits)||0)>=((ins.cl&&ins.cl.requis)||2)?"":"disabled"}>Lâché ▸ ab initio</button></div>`:""}
-    ${o&&inEval(o)&&(o.exclus||[]).length?`<div class="note">TRI ayant déjà évalué : <span class="c-w">${(o.exclus||[]).map(esc).join(", ")}</span> · <button class="link c-cyn" data-go="evals">programmer un vol ▸</button></div>`:""}
+    ${o&&inEval(o)&&(o.exclus||[]).length?`<div class="note">TRI ayant déjà évalué : <span class="c-w">${(o.exclus||[]).map(esc).join(", ")}</span>${(o.evalsRestantes||0)>0?` · <button class="link c-cyn" data-go="evals">programmer un vol ▸</button>`:""}</div>`:""}
+    ${evalsDone(o)?collegeBlock(p, o):""}
     <label class="fld wide"><span>Note</span><input type="text" data-ff="note" value="${esc(fx.note||"")}" placeholder="Ex. : en congé jusqu'au 20/11"></label>
   </section>
 
@@ -646,10 +665,32 @@ function vFiche(){
     <div class="note">Instruction PL, checks et évaluations se suivent : passer aux checks éteint l'instruction PL, passer aux évaluations éteint les checks. Check local et check nav sont indépendants.</div>
   </section>
 
+  ${sortieBlock(p)}
   ${(I.tr||sim.all.length)?`<section class="du"><div class="du-t">Activité</div>
     ${sim.all.length?`<details><summary>Simulateur (${sim.all.length} séance${sim.all.length>1?"s":""})</summary><div class="prog" style="margin-top:6px">${sim.all.slice(-12).reverse().map(x=>`<div class="p"><span class="mono">${frDate(x.date)} S${x.s}</span><b>${esc(x.instr||"—")}</b><span class="mono">${esc(x.crew||"")}</span></div>`).join("")}</div></details>`:""}
     ${I.tr?`<details><summary>Vols TrainerU (${I.tr.vols.length})</summary><div class="prog" style="margin-top:6px">${I.tr.vols.map(v=>`<div class="p"><span class="mono">${frDate(v.date)}</span><span class="pill ${v.code==="c"||v.code==="e"?"ok":(v.code==="v"||v.code==="p"?"info":"mute")}">${VCODE[v.code]||esc(v.libelle)}</span><b>${esc(v.instr.nom)}</b><span class="mono">${esc(v.vols)}</span></div>`).join("")}</div></details>`:""}
   </section>`:""}`;
+}
+
+function collegeBlock(p, o){
+  const c = o.college||{}, out = isOut(p);
+  return `<div class="card ${c.resultat==="Admis"?"":"warn"}"><h3>Collège passage CDB</h3>
+    <div class="row"><label class="fld grow"><span>Date du collège</span><input type="date" data-col="date" data-m="${o.matricule}" value="${esc(c.date||COLLEGE_DATE)}"></label></div>
+    <div class="row"><span class="note">Résultat :</span>
+      <button class="b sm ${c.resultat==="Admis"?"okb":""}" data-colres="Admis" data-m="${o.matricule}">${c.resultat==="Admis"?"✓ ":""}Admis</button>
+      <button class="b sm ${c.resultat==="Ajourné"?"crb":""}" data-colres="Ajourné" data-m="${o.matricule}">${c.resultat==="Ajourné"?"✓ ":""}Ajourné</button>
+      ${c.resultat?`<button class="b sm" data-colres="" data-m="${o.matricule}">Effacer</button>`:""}</div>
+    ${c.resultat==="Admis"?`<div class="row"><label class="fld grow"><span>Départ en QT ATR le</span><input type="date" data-col="qtDate" data-m="${o.matricule}" value="${esc(c.qtDate||"")}"></label></div>
+      ${out?"":`<button class="b okb" data-sortie="QT ATR" data-pid="${esc(p.id)}" data-d="${esc(c.qtDate||T0)}">Parti en QT ATR : retirer du secteur ▸</button>`}`:""}
+  </div>`;
+}
+function sortieBlock(p){
+  const so = (st.fiches[p.id]||{}).sorti;
+  if (so) return `<section class="du"><div class="du-t">Hors secteur</div><div class="item info"><div class="txt"><b>Sorti du secteur le ${frDate(so.date)}</b><div class="sub">${esc(so.motif||"")} · sa fiche et son historique restent consultables (filtre « Sortis »).</div></div><button class="b sm" data-reint="${esc(p.id)}">Réintégrer</button></div></section>`;
+  return `<section class="du"><div class="du-t">Sortie du secteur</div>
+    <div class="form"><select id="soM" aria-label="Motif"><option>QT ATR</option><option>Mutation autre secteur</option><option>Retraite</option><option>Autre</option></select>
+    <input type="date" id="soD" value="${T0}" aria-label="Date"><button class="b crb" data-sortie="" data-pid="${esc(p.id)}">Retirer du secteur</button></div>
+    <div class="note">Le pilote disparaît des listes et des alarmes, mais sa fiche reste dans le filtre « Sortis ».</div></section>`;
 }
 
 /* enregistrement d'un champ de la fiche */
@@ -676,7 +717,7 @@ const MODULES = [
 function vHome(){
   const A = alerts();
   const by = {}; A.forEach(a=>{ by[a.v]=by[a.v]||{crit:0,warn:0,info:0,ok:0}; by[a.v][a.k]++; });
-  const q = norm(F("hQ","")), reg = registry();
+  const q = norm(F("hQ","")), reg = activeReg();
   let hits;
   if (q) hits = reg.filter(p=>norm(p.nom).includes(q) || String(p.mat).includes(q)).slice(0,8);
   else hits = reg.map(p=>({p,s:pilotStatus(p)})).filter(x=>x.s.c==="c-red"||x.s.c==="c-amb").slice(0,6).map(x=>x.p);
@@ -1057,6 +1098,10 @@ V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.pilot) return openPilot(d.pilot);
+  if (d.colres!=null && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), resultat:d.colres}}, d.colres?"Résultat du collège : "+d.colres:"Résultat effacé"); }
+  if (d.sortie!=null && d.pid) { const motif = d.sortie || val("soM"), date = d.sortie ? (d.d||T0) : (val("soD")||T0);
+    return put("fiches/"+d.pid, {...(st.fiches[d.pid]||{}), sorti:{motif, date}}, "Retiré du secteur ("+motif+")"); }
+  if (d.reint) return put("fiches/"+d.reint, {...(st.fiches[d.reint]||{}), sorti:null}, "Pilote réintégré");
   if (d.chk) return d.undo ? upd("opl/"+d.chk, {[d.f]:"En attente", [d.f+"Date"]:""}, "Check remis en attente")
     : upd("opl/"+d.chk, {[d.f]:"Validé", [d.f+"Date"]: val("cd-"+d.f)||T0}, (d.f==="checkNav"?"Check nav":"Check local")+" validé");
   if (d.assign) { const p = pilotById(d.pid); if (p) await assign(p, d.assign); return; }
@@ -1117,6 +1162,7 @@ V.addEventListener("change", e=>{
   if (t.id && t.id.startsWith("tri-")) ui.form[t.id.slice(4)].tri = t.value;
   if (t.id && t.id.startsWith("date-")) ui.form[t.id.slice(5)].date = t.value;
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
+  if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
   if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
   if (d.plf) upd("opl/"+d.plf, {[d.k]:+t.value||0});
   if (d.dos!=null && d.dos!=="") upd("opl/"+d.dos, {dossier:t.value}, "Dossier mis à jour");
