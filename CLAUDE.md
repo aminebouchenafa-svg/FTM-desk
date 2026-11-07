@@ -7,7 +7,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 
 ## Collections
 - `opl/<matricule>` : OPL en checks ou en vols d'évaluation (`evalsRestantes`, `exclus` = TRI ayant déjà évalué, `programmes`).
-- `ref/tri` (TRI évaluateurs), `ref/licences` (état de validité), `ref/equipes` (safety pilots, candidats TRI).
+- `ref/tri` {evaluateurs (noms de famille), secteur (tous les TRI), tre} : modifiés depuis la fiche (interrupteurs TRI / TRE / Évaluateur), `ref/licences` (état de validité), `ref/equipes` (safety pilots, candidats TRI).
 - `simu/<AAAA-MM>` : planning simu par mois (créneaux S1..S5).
 - `vols/<début>_<fin>` : exports TrainerU « Crew Training Schedule ».
 - `memos/*` : mémos et rappels {texte, echeance, source (DO, SDF, SDPNT, Chef secteur ligne, Adjoint, Formation, Programmes, Moi), horizon, cat pro|projet, fait}.

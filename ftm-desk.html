@@ -526,9 +526,10 @@ function pilotInfo(p){
   const safety = ((st.ref.equipes&&st.ref.equipes.safety)||[]).some(x=>sameP(p, x.nom, x.mat));
   const cand = ((st.ref.equipes&&st.ref.equipes.candidatsTRI)||[]).find(x=>sameP(p, x.nom, ""));
   const evaluateur = TRI().some(t=>sameP(p, t, ""));
-  const tri = evaluateur || ((st.ref.tri&&st.ref.tri.secteur)||[]).some(t=>sameP(p, t, ""));
+  const tre = ((st.ref.tri&&st.ref.tri.tre)||[]).some(t=>sameP(p, t, ""));
+  const tri = evaluateur || tre || ((st.ref.tri&&st.ref.tri.secteur)||[]).some(t=>sameP(p, t, ""));
   const tr = trainees().find(t=>sameP(p, t.nom, t.id));
-  return {opl, instr, init, max, valid, lic, safety, cand, evaluateur, tri, tr};
+  return {opl, instr, init, max, valid, lic, safety, cand, evaluateur, tri, tre, tr};
 }
 const isOut = p => !!(st.fiches[p.id] && st.fiches[p.id].sorti);
 const activeReg = () => registry().filter(p=>!isOut(p));
@@ -573,6 +574,7 @@ async function assign(p, what){
     return put("opl/"+key, {...base, ...data, exclus:[], programmes:[]}, "Affecté aux évaluations"); }
   if (what==="max") { if (I.max) return go("max"); return add("max", {nom:p.nom, mat, pos:fn||"", etape:"", licenceOk:false, suiviInforme:false, progInforme:false}, "Affecté à la formation MAX"); }
   if (what==="valid") { if (I.valid) return go("valid"); return put("valid/"+key, {nom:p.nom, mat, fonction:fn, items:{}}, "Ajouté au suivi des validités"); }
+  if (what==="qtri" || what==="qtre" || what==="qeval") return setQualif(p, what, true);
   if (what==="safety") { const E = st.ref.equipes||{}; const S = (E.safety||[]).slice();
     const i = S.findIndex(x=>sameP(p, x.nom, x.mat)); if (i>=0) S.splice(i,1); else S.push({mat, nom:p.nom});
     return upd("ref/equipes", {safety:S}, i>=0?"Retiré des safety pilots":"Ajouté aux safety pilots"); }
@@ -597,6 +599,21 @@ function lskRow(p, s){
   return `<button class="lsk" data-pilot="${esc(p.id)}"><span class="k"></span><span class="n">${esc(p.nom)}<small>${esc(p.fonction||"—")} · ${esc(p.mat||"sans matricule")}</small></span><span class="s ${s.c}">${esc(s.t)} ▸</span></button>`;
 }
 
+/* qualifications instructeur : listes de ref/tri (secteur = tous les TRI, tre, evaluateurs) */
+async function setQualif(p, what, on){
+  const T = {...(st.ref.tri||{})};
+  const lists = {qtri:"secteur", qtre:"tre", qeval:"evaluateurs"};
+  const keyL = lists[what];
+  const surnameCap = n => { const w = norm(n).split(" "); const sn = PREFIX.includes(w[0]) && w.length>2 ? w[0]+" "+w[1] : w[0]; return sn.charAt(0)+sn.slice(1).toLowerCase(); };
+  const label = {qtri:"TRI", qtre:"TRE", qeval:"évaluateur"}[what];
+  const patch = {};
+  const edit = (k, add) => { let L = (T[k]||[]).slice(); L = L.filter(x=>!sameP(p, x, "")); if (add) L.push(k==="evaluateurs" ? surnameCap(p.nom) : p.nom); patch[k] = L; T[k] = L; };
+  edit(keyL, on);
+  if (on && what!=="qtri") edit("secteur", true);          // un TRE ou un évaluateur est aussi TRI
+  if (!on && what==="qtri") { edit("tre", false); edit("evaluateurs", false); }  // plus TRI : plus TRE ni évaluateur
+  return upd("ref/tri", patch, on ? `${p.nom} : ${label} ajouté` : `${p.nom} : ${label} retiré`);
+}
+
 /* retrait d'une affectation */
 async function unassign(p, what){
   const I = pilotInfo(p);
@@ -605,6 +622,7 @@ async function unassign(p, what){
   if (what==="max" && I.max) return del("max/"+I.max.id, "Retiré de la formation MAX");
   if (what==="valid" && I.valid) return del("valid/"+I.valid.id, "Retiré du suivi des validités");
   if (what==="safety") return assign(p, "safety");
+  if (what==="qtri" || what==="qtre" || what==="qeval") return setQualif(p, what, false);
   if ((what==="local" || what==="nav") && I.opl) { const f = what==="local"?"checkLocal":"checkNav", g = what==="local"?"checkNav":"checkLocal";
     if (!(I.opl[g]||"") && !(I.opl.programmes||[]).length) return del("opl/"+I.opl.matricule, "Affectation retirée");
     return upd("opl/"+I.opl.matricule, {[f]:"", [f+"Date"]:""}, what==="local"?"Retiré du check local":"Retiré du check nav"); }
@@ -651,7 +669,7 @@ function vFiche(){
   return `
   <section class="du"><div class="du-t">Fiche pilote <span>${esc(p.fonction||"")} · ${esc(p.mat||"sans matricule")}</span></div>
     <div class="idn"><div class="nm">${esc(p.nom)}</div><div class="pill ${s.c==="c-red"?"crit":s.c==="c-amb"?"warn":s.c==="c-grn"?"ok":"mag"}">${esc(s.t)}</div></div>
-    <div class="row">${[I.safety&&`<span class="pill ok">Safety pilot</span>`, I.evaluateur&&`<span class="pill info">TRI évaluateur</span>`, (I.tri&&!I.evaluateur)&&`<span class="pill info">TRI</span>`, I.cand&&`<span class="pill mag">Candidat TRI</span>`].filter(Boolean).join(" ")}</div>
+    <div class="row">${[I.safety&&`<span class="pill ok">Safety pilot</span>`, I.evaluateur&&`<span class="pill info">TRI évaluateur</span>`, (I.tri&&!I.evaluateur)&&`<span class="pill info">TRI</span>`, I.tre&&`<span class="pill info">TRE</span>`, I.cand&&`<span class="pill mag">Candidat TRI</span>`].filter(Boolean).join(" ")}</div>
     <div class="fma">${steps.map(([k,l],i)=>`<div class="${stepCls(k,i)}">${l}</div>`).join("")}</div>
     ${I.init && (I.init.heures||0) < r.initHeures?`<div class="item warn"><div class="txt"><b>Ab initio</b><div class="sub">Ne vole jamais avec un autre ab initio.</div></div></div>`:""}
   </section>
@@ -680,6 +698,14 @@ function vFiche(){
     <label class="fld wide"><span>Note</span><input type="text" data-ff="note" value="${esc(fx.note||"")}" placeholder="Ex. : en congé jusqu'au 20/11"></label>
   </section>
 
+  ${(p.fonction==="CPT" || I.tri) ? `<section class="du"><div class="du-t">Qualifications instructeur <span>ON / OFF</span></div>
+    <div class="sws">
+      ${sw("qtri","TRI · instructeur qualification de type", !!I.tri, I.tri?"Proposé dans les permutations simu":"")}
+      ${sw("qtre","TRE · examinateur", !!I.tre, "")}
+      ${sw("qeval","Évaluateur (vols d'évaluation)", !!I.evaluateur, I.evaluateur?"Proposé pour programmer les évals":"")}
+    </div>
+    <div class="note">Un TRE ou un évaluateur est aussi compté comme TRI. Retirer TRI retire aussi TRE et évaluateur.</div>
+  </section>` : ""}
   <section class="du"><div class="du-t">Affectations <span>ON / OFF</span></div>
     <div class="sws">
       ${sw("instr","Instruction ligne", !!ins, ins?`${L}/${r.legsLacher} legs${ins.lache?" · lâché le "+frDate(ins.lache):""}`:"")}
