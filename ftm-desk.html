@@ -784,7 +784,8 @@ function vHome(){
   else hits = reg.map(p=>({p,s:pilotStatus(p)})).filter(x=>x.s.c==="c-red"||x.s.c==="c-amb").slice(0,6).map(x=>x.p);
   const nW = A.filter(a=>a.k==="crit").length, nC = A.filter(a=>a.k==="warn").length;
   const hr = new Date().getHours();
-  return `<div class="hero"><h2>${hr<12?"Bonjour":hr<18?"Bon après-midi":"Bonsoir"}, Commandant</h2><p>${nW?`${nW} point${nW>1?"s":""} urgent${nW>1?"s":""} et ${nC} à suivre aujourd'hui.`:"Aucun point urgent aujourd'hui."}</p></div>
+  const banner = st.local ? `<div class="item ${Object.keys(st.opl).length?"info":"warn"}"><div class="txt"><b>Version GitHub : tes données restent sur cet appareil.</b><div class="sub">${Object.keys(st.opl).length?"Pense à exporter une sauvegarde de temps en temps.":"Importe ton fichier de sauvegarde pour retrouver tes pilotes."}</div></div><button class="b sm pri" data-go="regles">Sauvegarde</button></div>` : "";
+  return `${banner}<div class="hero"><h2>${hr<12?"Bonjour":hr<18?"Bon après-midi":"Bonsoir"}, Commandant</h2><p>${nW?`${nW} point${nW>1?"s":""} urgent${nW>1?"s":""} et ${nC} à suivre aujourd'hui.`:"Aucun point urgent aujourd'hui."}</p></div>
   <div class="deck">
   <section class="du" style="grid-area:eicas"><div class="du-t">Alarmes <span>${nW} urgentes · ${nC} à suivre · ${A.length-nW-nC} infos</span></div>
     <div class="eicas">${A.length ? A.slice(0,10).map(a=>`<button class="msgl ${a.k}" data-go="${a.v}"><span class="m">${esc(a.t)}<span class="d">${esc(a.s)}</span></span></button>`).join("")
@@ -1126,9 +1127,16 @@ function vMoi(){
 }
 
 /* --- Règles --- */
+function backupBlock(){
+  if (!st.local) return "";
+  return `<div class="card"><h3>Sauvegarde de cet appareil</h3>
+    <div class="note">Ici, les données sont gardées dans ce navigateur. Exporte-les régulièrement pour ne rien perdre, et importe ton fichier de sauvegarde sur un autre appareil.</div>
+    <div class="row"><button class="b pri" data-export="1">Exporter mes données</button>
+    <label class="b" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">Importer un fichier<input type="file" id="impFile" accept=".json,application/json" hidden></label></div></div>`;
+}
 function vRegles(){
   const r = R(); const fld = (k,l) => `<label>${l}<input type="number" min="0" value="${r[k]}" data-regle="${k}"></label>`;
-  return `<div class="item ${r.manexConfirme?"ok":"warn"}"><div class="txt"><b>${r.manexConfirme?"Règles confirmées avec le Manex D":"Règles à confirmer avec le Manex D"}</b><div class="sub">Envoie-moi le Manex D : je vérifie chaque seuil, ainsi que les conditions pour être safety pilot.</div></div></div>
+  return `${backupBlock()}<div class="item ${r.manexConfirme?"ok":"warn"}"><div class="txt"><b>${r.manexConfirme?"Règles confirmées avec le Manex D":"Règles à confirmer avec le Manex D"}</b><div class="sub">Envoie-moi le Manex D : je vérifie chaque seuil, ainsi que les conditions pour être safety pilot.</div></div></div>
   <div class="card"><h3>Lâcher en ligne</h3><div class="row">${fld("legsLacher","Legs pour le lâcher")}${fld("legsAlerte","Alarme à (legs)")}${fld("legsSafety","Legs avec safety pilot")}</div></div>
   <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div></div>
   <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}</div>
@@ -1169,6 +1177,8 @@ V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.pilot) return openPilot(d.pilot);
+  if (d.export && st.db.exportAll) { const blob = new Blob([JSON.stringify(st.db.exportAll(), null, 1)], {type:"application/json"}); const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "ftm-desk-sauvegarde-"+T0+".json"; document.body.appendChild(a); a.click(); a.remove(); return toast("Sauvegarde exportée"); }
   if (d.colres!=null && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), resultat:d.colres}}, d.colres?"Résultat du collège : "+d.colres:"Résultat effacé"); }
   if (d.sortie!=null && d.pid) { const motif = d.sortie || val("soM"), date = d.sortie ? (d.d||T0) : (val("soD")||T0);
     return put("fiches/"+d.pid, {...(st.fiches[d.pid]||{}), sorti:{motif, date}}, "Retiré du secteur ("+motif+")"); }
@@ -1232,6 +1242,7 @@ V.addEventListener("change", e=>{
   const t = e.target, d = t.dataset;
   if (t.id && t.id.startsWith("tri-")) ui.form[t.id.slice(4)].tri = t.value;
   if (t.id && t.id.startsWith("date-")) ui.form[t.id.slice(5)].date = t.value;
+  if (t.id==="impFile" && t.files && t.files[0]) { const fr = new FileReader(); fr.onload = () => { try { const obj = JSON.parse(fr.result); if (!obj || typeof obj!=="object") throw 0; st.db.importAll(obj); toast("Données importées"); } catch(e) { toast("Fichier illisible : choisis le fichier ftm-desk-sauvegarde."); } }; fr.readAsText(t.files[0]); return; }
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
   if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
   if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
@@ -1283,9 +1294,36 @@ V.addEventListener("submit", async e=>{
 });
 
 render();
+/* base locale (hors claude.ai, ex. GitHub Pages) : même interface, stockée dans ce navigateur */
+function makeLocalDb(){
+  const KEY = "ftmdesk.db.v1"; let data = {};
+  try { data = JSON.parse(localStorage.getItem(KEY)||"{}") || {}; } catch(e) { data = {}; }
+  const subs = {};
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e) { toast("Stockage plein ou bloqué sur cet appareil."); } };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const snap = c => ({docs: Object.entries(data[c]||{}).map(([id,d])=>({id, exists:true, data:()=>clone(d), metadata:{fromCache:false,hasPendingWrites:false}}))});
+  const emit = c => (subs[c]||[]).forEach(fn=>{ try{ fn(snap(c)); }catch(e){} });
+  const merge = (a,b) => { const o = {...a}; Object.entries(b).forEach(([k,v])=>{ o[k] = (v && typeof v==="object" && !Array.isArray(v) && a[k] && typeof a[k]==="object" && !Array.isArray(a[k])) ? merge(a[k], v) : v; }); return o; };
+  const docRef = (c, id) => ({ id,
+    async get(){ const d = (data[c]||{})[id]; return {id, exists:!!d, data:()=>d?clone(d):undefined}; },
+    async set(v){ (data[c] = data[c]||{})[id] = clone(v); save(); emit(c); },
+    async update(v){ const cur = (data[c]||{})[id]; if (!cur) throw {code:"invalid_argument", message:"absent"}; data[c][id] = merge(cur, clone(v)); save(); emit(c); },
+    async delete(){ if (data[c]) delete data[c][id]; save(); emit(c); } });
+  const api = {
+    collection: c => ({ onSnapshot(fn){ (subs[c] = subs[c]||[]).push(fn); setTimeout(()=>fn(snap(c)),0); return ()=>{ subs[c] = subs[c].filter(x=>x!==fn); }; },
+      doc: id => docRef(c, id || uid("d")),
+      async add(v){ const id = uid("d"); await docRef(c, id).set(v); return docRef(c, id); } }),
+    doc: path => { const i = path.lastIndexOf("/"); return docRef(path.slice(0,i), path.slice(i+1)); },
+    exportAll: () => clone(data),
+    importAll: obj => { data = clone(obj||{}); save(); Object.keys(subs).forEach(emit); }
+  };
+  return api;
+}
+
 (async function boot(){
-  const db = window.claude && await window.claude.use("db");
-  if (!db) { st.dbFailed = true; return render(); }
+  let db = null;
+  if (window.claude && window.claude.use) { try { db = await window.claude.use("db"); } catch(e) { db = null; } }
+  if (!db) { db = makeLocalDb(); st.local = true; }
   st.db = db;
   COLS.forEach(name => db.collection(name).onSnapshot(s=>{ st[name]={}; s.docs.forEach(x=>st[name][x.id]=x.data()); st.loaded[name]=true; render(); }, ()=>{ st.loaded[name]=true; render(); }));
 })();

@@ -40,3 +40,8 @@ Un même TRI sur des jours non consécutifs pour un même OPL = infraction à si
 ## Interface
 Thème violet façon captures du FTM : mode jour (lavande) et mode nuit (indigo étoilé), bouton soleil/lune (localStorage ftm.theme), police Poppins, boutons en dégradé indigo→violet. Fiche pilote avec interrupteurs d'affectation.
 Briefing push chaque matin à 06:44 (Alger) : tâche planifiée « Briefing FTM Desk » (lecture seule de la base).
+
+## GitHub Pages
+`index.html` = `ftm-desk.html` + squelette HTML, généré par `python3 tools/build_pages.py` (à relancer après chaque modification de `ftm-desk.html`).
+Hors claude.ai, la page utilise une base locale (localStorage `ftmdesk.db.v1`) avec export/import JSON (module Règles). Ne jamais mettre de données pilotes dans le dépôt : le site est public.
+Adresse : https://aminebouchenafa-svg.github.io/FTM-desk/ (branche claude/ftm-desk-dashboard, dossier racine).
