@@ -166,6 +166,8 @@ button.b.okb{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
 button.b.crb{border-color:var(--crit);color:var(--crit);background:var(--crit-bg)}
 button.b.sm{padding:5px 12px;font-size:.76rem}
 button.b:disabled{opacity:.4;cursor:not-allowed}
+button.link.plink{font-weight:inherit}
+button.link.plink:hover{color:var(--accent-ink);text-decoration:underline}
 button.link{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 select,input[type=text],input[type=date],input[type=number],input[type=search],textarea{font:400 .9rem var(--font);padding:8px 12px;border-radius:12px;border:1px solid var(--line2);background:var(--surface2);color:var(--ink);min-width:0;max-width:100%}
@@ -667,6 +669,16 @@ function vPilotes(){
     <form class="form" data-form="newpilot"><input type="text" id="npNom" class="grow" placeholder="NOM Prénom" required><input type="text" id="npMat" placeholder="Matricule" style="width:110px"><select id="npFn"><option>FO</option><option>CPT</option></select><button class="b pri" type="submit">Ajouter</button></form>
     <div class="note">${esc((st.ref.pilotes&&st.ref.pilotes.source)||"Envoie-moi la liste complète des pilotes du secteur.")}</div></section>`;
 }
+function findPilot(nom, mat){
+  const R0 = registry();
+  return (mat && R0.find(p=>p.mat && String(p.mat)===String(mat))) || R0.find(p=>norm(p.nom)===norm(nom)) || R0.find(p=>sameP(p, nom, mat));
+}
+function pLink(nom, mat){
+  const p = findPilot(nom, mat);
+  return p ? `<button class="link plink" data-pilot="${esc(p.id)}" title="Ouvrir la fiche">${esc(nom)}<span class="c-cyn"> ›</span></button>` : esc(nom);
+}
+const pilotDatalist = () => memo("pdl", ()=>`<datalist id="pilotList">${activeReg().map(p=>`<option value="${esc(p.nom)}">${esc((p.fonction||"")+(p.mat?" · "+p.mat:""))}</option>`).join("")}</datalist>`);
+function pickPilot(nom){ const p = findPilot(nom, ""); return p ? {nom:p.nom, mat:p.mat||"", pos:p.fonction||""} : {nom:String(nom||"").trim(), mat:"", pos:""}; }
 function lskRow(p, s){
   s = s || pilotStatus(p);
   return `<button class="lsk" data-pilot="${esc(p.id)}"><span class="k"></span><span class="n">${esc(p.nom)}<small>${esc(p.fonction||"—")} · ${esc(p.mat||"sans matricule")}</small></span><span class="s ${s.c}">${esc(s.t)} ▸</span></button>`;
@@ -934,19 +946,20 @@ function gauge(L){
   <div class="gscale"><span>0</span><span>safety ${r.legsSafety}</span><span>alarme ${r.legsAlerte}</span><span>${max} legs</span></div>`;
 }
 function vLacher(){
-  const r = R(), P = lacherList().sort((a,b)=>(!!a.lache-!!b.lache) || legsOf(b)-legsOf(a));
+  const lq = norm(F("lNom","")), r = R(), P = lacherList().filter(p=>!lq || norm(p.nom).includes(lq)).sort((a,b)=>(!!a.lache-!!b.lache) || legsOf(b)-legsOf(a));
   const S = (st.ref.equipes&&st.ref.equipes.safety)||[];
   return `<div class="note">Lâcher à ${r.legsLacher} legs (un aller-retour = 2 legs). Safety pilot obligatoire sur les ${r.legsSafety} premiers legs. Pré-contrôle, puis Check Line en 2 ou 4 étapes. Alarme à ${r.legsAlerte} legs. Après le lâcher : toujours un copilote expérimenté.</div>
   <form class="form" data-form="lacher">
-    <input type="text" id="lNom" class="grow" placeholder="Pilote en instruction" required>
+    <input type="text" id="lNom" class="grow" list="pilotList" placeholder="Chercher ou ajouter un pilote (nom ou matricule)" value="${esc(F("lNom",""))}" autocomplete="off" required>
     <select id="lPos"><option>FO</option><option>CPT</option></select>
     <label>Legs déjà faits<input type="number" id="lLegs" min="0" value="0"></label>
     <button class="b pri" type="submit">Ajouter</button></form>
+  ${pilotDatalist()}${lq&&!P.length?`<div class="note">Aucun pilote en instruction ne correspond. Choisis-le dans la liste proposée puis touche Ajouter.</div>`:""}
   <datalist id="safetyList">${S.map(p=>`<option value="${esc(p.nom)}">`).join("")}</datalist>
   <datalist id="triList">${[...triPool().values()].map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
   ${P.length?`<section class="grid2">${P.map(p=>{ const L = legsOf(p), s = lacherState(p), f = ui.form["v"+p.id], bad = legsSansSafety(p);
-    return `<article class="card ${s.k==="crit"||bad.length?"crit":""} ${p.lache?"done":""}">
-      <div class="row spread"><div><div class="name">${esc(p.nom)}</div><div class="mono">${esc(p.pos||"")}${p.mat?" · "+esc(p.mat):""}</div></div><span class="pill ${s.k||"mute"}">${esc(s.t)}</span></div>
+    return `<article class="card ${s.k==="crit"||bad.length?"crit":""} ${p.lache?"done":""}" data-nm="${esc(norm(p.nom))}">
+      <div class="row spread"><div><div class="name">${pLink(p.nom, p.mat)}</div><div class="mono">${esc(p.pos||"")}${p.mat?" · "+esc(p.mat):""}</div></div><span class="pill ${s.k||"mute"}">${esc(s.t)}</span></div>
       <div class="row" style="align-items:baseline;gap:6px"><span class="big">${L}</span><span class="note">/ ${r.legsLacher} legs</span></div>
       ${gauge(L)}
       ${bad.length?`<div class="item crit"><div class="txt">${bad.length} vol${bad.length>1?"s":""} sans safety pilot de la liste dans les ${r.legsSafety} premiers legs</div></div>`:""}
@@ -976,10 +989,10 @@ function vLacher(){
 function vInit(){
   const r = R(), P = Object.entries(st.init).map(([id,d])=>({id,...d})).sort((a,b)=>(a.heures||0)-(b.heures||0));
   return `<div class="item warn"><div class="txt"><b>Deux pilotes ab initio ne volent jamais ensemble.</b><div class="sub">Ab initio : moins de ${r.initHeures} h après le lâcher. Vérifie les équipages avec la recherche ci-dessous.</div></div></div>
-  <form class="form" data-form="init"><input type="text" id="iNom" class="grow" placeholder="Pilote ab initio" required><select id="iPos"><option>FO</option><option>CPT</option></select><label>Heures après lâcher<input type="number" id="iH" min="0" value="0"></label><button class="b pri" type="submit">Ajouter</button></form>
+  <form class="form" data-form="init"><input type="text" id="iNom" class="grow" list="pilotList" placeholder="Pilote ab initio (annuaire)" autocomplete="off" required>${pilotDatalist()}<select id="iPos"><option>FO</option><option>CPT</option></select><label>Heures après lâcher<input type="number" id="iH" min="0" value="0"></label><button class="b pri" type="submit">Ajouter</button></form>
   ${P.length>1?`<form class="form" data-form="pair"><span class="note">Contrôle d'équipage :</span><select id="pA">${P.map(p=>`<option>${esc(p.nom)}</option>`).join("")}</select><span>+</span><input type="text" id="pB" placeholder="Autre membre d'équipage" class="grow"><button class="b" type="submit">Vérifier</button></form>`:""}
   ${P.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Progression</th><th></th></tr></thead><tbody>${P.map(p=>{ const pc = Math.min(100,Math.round((p.heures||0)/r.initHeures*100));
-    return `<tr><td><b>${esc(p.nom)}</b><div class="mono">${esc(p.pos||"")}${p.lacheLe?" · lâché "+frDate(p.lacheLe):""}</div></td>
+    return `<tr><td><b>${pLink(p.nom, p.mat)}</b><div class="mono">${esc(p.pos||"")}${p.lacheLe?" · lâché "+frDate(p.lacheLe):""}</div></td>
     <td><input type="number" min="0" value="${p.heures||0}" data-inith="${p.id}" aria-label="Heures"></td>
     <td style="min-width:120px"><div class="gauge ${pc>=100?"ok":""}"><i style="width:${pc}%"></i></div><span class="note">${Math.max(0,r.initHeures-(p.heures||0))} h restantes</span></td>
     <td><button class="b sm" data-delinit="${p.id}">✕</button></td></tr>`;}).join("")}</tbody></table></div>`:`<div class="empty-state">Envoie-moi la liste des pilotes ab initio (heures depuis le lâcher). Les pilotes lâchés depuis l'onglet Lâcher arrivent ici tout seuls.</div>`}`;
@@ -997,7 +1010,7 @@ function vPL(){
   return `<div class="note">Parcours : instruction PL (${r.plHeures} h ou ${r.plEtapes} étapes${r.manexConfirme?"":", à confirmer avec le Manex D"}) → dossier à la formation → désignation → Check Local et Check Nav → vols d'évaluation.</div>
   <section class="list"><h2>Instruction PL (${PL.length})</h2>
   ${PL.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Étapes</th><th>Dossier</th><th></th></tr></thead><tbody>${PL.map(o=>{ const fin = plDone(o);
-    return `<tr><td><b>${esc(o.nom)}</b><div class="mono">${esc(o.matricule)}</div></td>
+    return `<tr><td><b>${pLink(o.nom, o.matricule)}</b><div class="mono">${esc(o.matricule)}</div></td>
     <td><input type="number" min="0" value="${o.plHeures||0}" data-plf="${o.matricule}" data-k="plHeures" aria-label="Heures"> <span class="note">/ ${r.plHeures}</span></td>
     <td><input type="number" min="0" value="${o.plEtapes||0}" data-plf="${o.matricule}" data-k="plEtapes" aria-label="Étapes"> <span class="note">/ ${r.plEtapes}</span></td>
     <td><select data-dos="${o.matricule}">${DOS.map(d=>`<option value="${d}" ${(o.dossier||"")===d?"selected":""}>${d||(fin?"À ramener !":"En cours")}</option>`).join("")}</select></td>
@@ -1005,7 +1018,7 @@ function vPL(){
   </section>
   <section class="list"><h2>Check Local et Check Nav (${CK.length})</h2>
   <div class="tbl"><table><thead><tr><th>Pilote</th><th>Check local</th><th>Check nav</th><th></th></tr></thead><tbody>
-  ${CK.map(o=>`<tr><td><b>${esc(o.nom)}</b><div class="mono">${esc(o.matricule)}</div></td><td>${selStat(o,"checkLocal")}</td><td>${selStat(o,"checkNav")}</td>
+  ${CK.map(o=>`<tr><td><b>${pLink(o.nom, o.matricule)}</b><div class="mono">${esc(o.matricule)}</div></td><td>${selStat(o,"checkLocal")}</td><td>${selStat(o,"checkNav")}</td>
     <td><button class="b sm" data-toeval="${o.matricule}" ${(o.checkLocal==="Validé"&&o.checkNav==="Validé")?"":"disabled"}>→ Évals</button></td></tr>`).join("")}
   </tbody></table></div></section>
   <div class="note">Envoie-moi la liste exacte des PL en instruction et le Manex D : je mets à jour heures, étapes et règles.</div>`;
@@ -1018,7 +1031,7 @@ function evCard(o){
   const done = lv==="done";
   const tag = g==="CDB" ? `<span class="pill ${lv==="crit"?"crit":"info"}">Passage CDB · ${frDate(o.echeance)}</span>` : g==="CIBLE" ? `<span class="pill warn">Ciblé${o.motif?" · "+esc(o.motif):""}</span>` : o.priorite==="prio" ? `<span class="pill ${lv==="crit"?"crit":"warn"}">Prioritaire · ${frDate(o.echeance)}</span>` : o.echeance?`<span class="pill mute">Avant le ${frDate(o.echeance)}</span>`:"";
   return `<article class="card ${done?"done":lv}">
-    <div class="row spread"><div><div class="name">${esc(o.nom)}</div><div class="mono">Mat. ${esc(o.matricule)}</div></div><div>${done?`<span class="pill ok">Terminé</span>`:tag}</div></div>
+    <div class="row spread"><div><div class="name">${pLink(o.nom, o.matricule)}</div><div class="mono">Mat. ${esc(o.matricule)}</div></div><div>${done?`<span class="pill ok">Terminé</span>`:tag}</div></div>
     <div class="stats">
       <div><div class="big">${faits(o)}<span class="note">/${o.total||R().evalsStd}</span></div><div class="note">évals faites</div></div>
       <div><div class="big" style="color:${n?"var(--crit)":"var(--ok)"}">${n}</div><div class="note">à programmer</div></div>
@@ -1050,7 +1063,7 @@ function vEvals(){
   const cnt = k => all.filter(o=>(o.groupe||"OPL")===k && evLevel(o)!=="done").length;
   return `<div class="item crit"><div class="txt"><b>Règle : jamais deux vols d'évaluation avec le même TRI.</b><div class="sub">Un TRI qui a déjà évalué le pilote ne t'est jamais proposé.</div></div></div>
   <div class="seg">${Object.entries(GROUPES).map(([k,l])=>`<button data-fset="evG" data-val="${k}" aria-pressed="${k===g}">${l} (${cnt(k)})</button>`).join("")}</div>
-  ${g!=="OPL"?`<form class="form" data-form="evnew" data-g="${g}"><input type="text" id="enNom" class="grow" placeholder="Nom du pilote" required><input type="text" id="enMat" placeholder="Matricule" style="width:110px" required>
+  ${g!=="OPL"?`<form class="form" data-form="evnew" data-g="${g}"><input type="text" id="enNom" class="grow" list="pilotList" placeholder="Nom du pilote (annuaire)" autocomplete="off" required>${pilotDatalist()}<input type="text" id="enMat" placeholder="Matricule" style="width:110px" required>
     <label>Évals faites<input type="number" id="enF" min="0" value="0"></label>
     ${g==="CIBLE"?`<input type="text" id="enMotif" placeholder="Événement : approche instable…"><label>Simus requis<input type="number" id="enS" min="0" value="2"></label>`:""}
     <input type="date" id="enD" value="${g==="CDB"?"2026-11-16":""}" aria-label="Échéance"><button class="b pri" type="submit">Ajouter</button></form>`:""}
@@ -1284,6 +1297,8 @@ function vSimu(){
         return `<div class="slot ${isEmptySlot(s)?"empty":"mine"}"><div class="t"><b>S${s.s}</b>${s.h}</div><div class="w">
         <form class="grid2" data-form="slot" data-key="${key}" style="gap:6px"><input type="text" id="sl-i" list="triList" value="${esc(s.instr)}" placeholder="TRI"><input type="text" id="sl-c" value="${esc(s.crew)}" placeholder="Équipage / séance">
           <div class="row"><button class="b sm pri" type="submit">Enregistrer</button><button class="b sm" type="button" data-closeform="slot">Fermer</button><button class="b sm crb" type="button" data-delslot="${key}">Supprimer</button></div></form>
+        ${(()=>{ const ids = [...new Set([...instrNames(s.instr), ...crewKeys(s.crew)].map(n=>{ const p = registry().find(q=>keySur(nameKey(q.nom))===n && (surCount()[n]||0)<=1); return p && p.id; }).filter(Boolean))];
+          return ids.length ? `<div class="row"><span class="note">Fiches :</span>${ids.map(id=>{ const p = pilotById(id); return `<button class="chip pend" data-pilot="${esc(id)}">${esc(p.nom)} ›</button>`; }).join("")}</div>` : ""; })()}
         <div class="note">Meilleurs TRI libres pour ce créneau (sans conflit) :</div>
         <div class="chips">${optReplace(s).slice(0,5).map(x=>`<button class="chip free" data-settri="${key}" data-val="${esc(x.n)}">${esc(x.n)} · ${x.sc}%</button>`).join("") || `<span class="note">Aucun TRI libre sans conflit ce jour-là.</span>`}</div>
         <div class="row"><button class="b sm pri" data-calcopen="${key}" data-mode="rempl">Toutes les options TRI</button><button class="b sm" data-calcopen="${key}" data-mode="depl">Déplacer cette séance</button></div>
@@ -1320,10 +1335,10 @@ function vValid(){
     ${SRf.slice(0,200).map(o=>`<tr><td><button class="link" data-pilot="${esc(o.p.id)}"><b>${esc(o.p.nom)}</b></button><div class="mono">${esc(o.p.fonction||"")}</div></td><td class="num">${frDate(o.x.last)||"—"}</td><td class="num">${frDate(o.x.exp)||"—"}</td><td class="num">${frDate(o.x.next)||"—"}</td><td><span class="pill ${o.s.k}">${esc(o.s.t)}</span></td></tr>`).join("") || `<tr><td colspan="5" class="note">Aucun pilote dans ce filtre.</td></tr>`}
     </tbody></table></div></section>` : "";
   return `${simBlock}${lcBlock}<div class="note">Contrôle en ligne valable ${r.clMois} mois. Rouge : expiré · orange : moins de 30 jours. Touche une case pour saisir la date d'expiration.</div>
-  <form class="form" data-form="valid"><input type="text" id="vaNom" class="grow" placeholder="Pilote" required><select id="vaFn"><option>CPT</option><option>FO</option><option>TRI</option></select><button class="b pri" type="submit">Ajouter</button></form>
+  <form class="form" data-form="valid"><input type="text" id="vaNom" class="grow" list="pilotList" placeholder="Pilote (annuaire)" autocomplete="off" required>${pilotDatalist()}<select id="vaFn"><option>CPT</option><option>FO</option><option>TRI</option></select><button class="b pri" type="submit">Ajouter</button></form>
   <input type="search" id="vQ" placeholder="Chercher un pilote…" value="${esc(F("vQ",""))}">
   ${L.length?`<div class="tbl"><table><thead><tr><th>Pilote</th>${types.map(t=>`<th>${esc(t)}</th>`).join("")}<th></th></tr></thead><tbody>
-  ${L.map(p=>`<tr><td><b>${esc(p.nom)}</b><div class="mono">${esc(p.fonction||"")}</div></td>${types.map(t=>{ const d = (p.items||{})[t], k = p.id+"|"+t;
+  ${L.map(p=>`<tr><td><b>${pLink(p.nom, p.mat)}</b><div class="mono">${esc(p.fonction||"")}</div></td>${types.map(t=>{ const d = (p.items||{})[t], k = p.id+"|"+t;
     return ec===k?`<td><form class="row" data-form="cell" data-key="${esc(k)}"><input type="date" id="ce" value="${d||""}"><button class="b sm pri" type="submit">OK</button></form></td>`
       :`<td class="cell ${cellLevel(d)}"><button class="link" data-cell="${esc(k)}">${d?frDate(d):"—"}</button></td>`; }).join("")}
     <td><button class="b sm" data-delvalid="${p.id}">✕</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty-state">Envoie-moi les états des stages sol (CRM, DGR, SMS, Sûreté, SSP1, SSP2…), des contrôles en ligne, des IC, IL et Check TRI : je remplis le tableau et j'allume les voyants 30 jours avant chaque expiration.</div>`}`;
@@ -1333,9 +1348,9 @@ function vValid(){
 function vMax(){
   const P = Object.entries(st.max).map(([id,d])=>({id,...d})).sort((a,b)=>(!!a.licenceOk-!!b.licenceOk)||a.nom.localeCompare(b.nom));
   return `<div class="note">Quand la licence MAX est prête : coche OK, puis informe le suivi des licences et la conception programme.</div>
-  <form class="form" data-form="max"><input type="text" id="xNom" class="grow" placeholder="Pilote en formation MAX" required><select id="xPos"><option>CPT</option><option>FO</option></select><input type="text" id="xEt" placeholder="Étape (ex. simu 1 fait)"><button class="b pri" type="submit">Ajouter</button></form>
+  <form class="form" data-form="max"><input type="text" id="xNom" class="grow" list="pilotList" placeholder="Pilote en formation MAX (annuaire)" autocomplete="off" required>${pilotDatalist()}<select id="xPos"><option>CPT</option><option>FO</option></select><input type="text" id="xEt" placeholder="Étape (ex. simu 1 fait)"><button class="b pri" type="submit">Ajouter</button></form>
   ${P.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Étape</th><th>Licence OK</th><th>Suivi licences</th><th>Conception prog.</th><th></th></tr></thead><tbody>
-  ${P.map(p=>`<tr><td><b>${esc(p.nom)}</b><div class="mono">${esc(p.pos||"")}</div></td><td><input type="text" value="${esc(p.etape||"")}" data-maxet="${p.id}" aria-label="Étape"></td>
+  ${P.map(p=>`<tr><td><b>${pLink(p.nom, p.mat)}</b><div class="mono">${esc(p.pos||"")}</div></td><td><input type="text" value="${esc(p.etape||"")}" data-maxet="${p.id}" aria-label="Étape"></td>
     <td><input type="checkbox" data-maxf="${p.id}" data-k="licenceOk" ${p.licenceOk?"checked":""} aria-label="Licence prête"></td>
     <td><input type="checkbox" data-maxf="${p.id}" data-k="suiviInforme" ${p.suiviInforme?"checked":""} ${p.licenceOk?"":"disabled"} aria-label="Suivi informé"></td>
     <td><input type="checkbox" data-maxf="${p.id}" data-k="progInforme" ${p.progInforme?"checked":""} ${p.licenceOk?"":"disabled"} aria-label="Programmes informés"></td>
@@ -1350,12 +1365,12 @@ function vEquipes(){
   let body = "";
   if (tab==="safety") body = `<div class="tbl"><table><thead><tr><th>Matricule</th><th>Safety pilot</th><th>Suivi</th></tr></thead><tbody>${(E.safety||[]).filter(p=>!q||norm(p.nom).includes(q)||p.mat.includes(q)).map(p=>{ const o = st.opl[p.mat];
       const tag = o ? (inEval(o) ? ((o.evalsRestantes||0)?`<span class="pill warn">${o.evalsRestantes} évals</span>`:`<span class="pill ok">Évals OK</span>`) : `<span class="pill mute">Checks</span>`) : "";
-      return `<tr><td class="num">${esc(p.mat)}</td><td>${esc(p.nom)}</td><td>${tag}</td></tr>`;}).join("")}</tbody></table></div>`;
+      return `<tr><td class="num">${esc(p.mat)}</td><td>${pLink(p.nom, p.mat)}</td><td>${tag}</td></tr>`;}).join("")}</tbody></table></div>`;
   if (tab==="tri") body = `<div class="card"><h3>TRI évaluateurs (${TRI().length})</h3><div class="chips">${TRI().map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>
       <h3>Tous les TRI du secteur (${secteur.length})</h3>${secteur.length?`<div class="chips">${secteur.filter(t=>!q||norm(t).includes(q)).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`:`<div class="note">Envoie-moi la liste : elle servira aux permutations simu.</div>`}</div>
     <div class="card"><h3>Candidats TRI · collège du 28/09/2026</h3><div class="tbl" style="border:0"><table><tbody>${(E.candidatsTRI||[]).map((c,i)=>`<tr><td class="num">${c.rang}</td><td>${esc(c.nom)}</td><td><select data-cand="${i}">${CS.map(s=>`<option ${s===c.statut?"selected":""}>${s}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></div>`;
   if (tab==="lic") { const Rw = lics().map((r,i)=>({...r,i,st:licStatus(r)})).filter(r=>!q||norm(r.nom).includes(q)).sort((a,b)=>({crit:0,warn:1,ok:2})[a.st.k]-({crit:0,warn:1,ok:2})[b.st.k]);
-    body = `<div class="tbl"><table><thead><tr><th>Pilote</th><th>Licence</th><th>Validité</th><th>État</th><th></th></tr></thead><tbody>${Rw.map(r=>`<tr><td><b>${esc(r.nom)}</b></td><td class="num">${esc(r.licence||"—")}</td><td class="num">${esc(r.validite||"—")}</td><td><span class="pill ${r.st.k}">${r.st.t}</span></td><td><button class="b sm ${r.fait?"":"okb"}" data-lic="${r.i}">${r.fait?"Annuler":"Renouvelée"}</button></td></tr>`).join("")}</tbody></table></div><div class="note">${esc((st.ref.licences&&st.ref.licences.source)||"")}</div>`; }
+    body = `<div class="tbl"><table><thead><tr><th>Pilote</th><th>Licence</th><th>Validité</th><th>État</th><th></th></tr></thead><tbody>${Rw.map(r=>`<tr><td><b>${pLink(r.nom, "")}</b></td><td class="num">${esc(r.licence||"—")}</td><td class="num">${esc(r.validite||"—")}</td><td><span class="pill ${r.st.k}">${r.st.t}</span></td><td><button class="b sm ${r.fait?"":"okb"}" data-lic="${r.i}">${r.fait?"Annuler":"Renouvelée"}</button></td></tr>`).join("")}</tbody></table></div><div class="note">${esc((st.ref.licences&&st.ref.licences.source)||"")}</div>`; }
   return `<div class="seg"><button data-fset="eqT" data-val="safety" aria-pressed="${tab==="safety"}">Safety pilots (${(E.safety||[]).length})</button><button data-fset="eqT" data-val="tri" aria-pressed="${tab==="tri"}">TRI</button><button data-fset="eqT" data-val="lic" aria-pressed="${tab==="lic"}">Licences</button></div>
   <input type="search" id="eqQ" placeholder="Chercher…" value="${esc(F("eqQ",""))}">${body}`;
 }
@@ -1371,7 +1386,7 @@ function vVols(){
   <input type="search" id="volQ" placeholder="Stagiaire ou instructeur…" value="${esc(F("volQ",""))}">
   <div class="seg">${[["all","Tous"],["instr","Instruction"],["ctrl","Contrôles"],["eval","Évals"]].map(([k,l])=>`<button data-fset="volF" data-val="${k}" aria-pressed="${vf===k}">${l}</button>`).join("")}</div>
   <section class="grid2">${T.map(t=>{ const s = st2(t);
-    return `<article class="card"><div class="row spread"><div><div class="name">${esc(t.nom)}</div><div class="mono">${esc(t.pos)} · ${esc(t.id)}</div></div><span class="pill ${s.k}">${s.t}</span></div>
+    return `<article class="card"><div class="row spread"><div><div class="name">${pLink(t.nom, t.id)}</div><div class="mono">${esc(t.pos)} · ${esc(t.id)}</div></div><span class="pill ${s.k}">${s.t}</span></div>
       <div class="chips">${Object.entries(t.n).map(([c,n])=>`<span class="chip">${VCODE[c]||c} × ${n}</span>`).join("")}</div>
       <details><summary>Détail (${t.vols.length})</summary><div class="prog" style="margin-top:6px">${t.vols.map(v=>`<div class="p"><span class="mono">${frDate(v.date)}</span><span class="pill ${v.code==="c"||v.code==="e"?"ok":(v.code==="v"||v.code==="p"?"info":"mute")}">${VCODE[v.code]||esc(v.libelle)}</span><b>${esc(v.instr.nom)}</b><span class="mono">${esc(v.vols)} ${esc(v.avion)}</span></div>`).join("")}</div></details>
     </article>`;}).join("")}</section>`;
@@ -1546,6 +1561,7 @@ V.addEventListener("change", e=>{
   if (t.id==="impFile" && t.files && t.files[0]) { const fr = new FileReader(); fr.onload = () => { try { const obj = JSON.parse(fr.result); if (!obj || typeof obj!=="object") throw 0; st.db.importAll(obj); toast("Données importées"); } catch(e) { toast("Fichier illisible : choisis le fichier ftm-desk-sauvegarde."); } }; fr.readAsText(t.files[0]); return; }
   if (["asSess","asTri","asFrom","asTo","asExcl"].includes(t.id)) { ui.f[t.id] = t.value; return render(); }
   if (d.regletxt) { put("ref/regles", {...(st.ref.regles||{}), [d.regletxt]:t.value}, "Règle enregistrée"); return; }
+  if (t.id==="enNom") { const pk = pickPilot(t.value); const m = document.getElementById("enMat"); if (m && pk.mat) m.value = pk.mat; return; }
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
   if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
   if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
@@ -1562,7 +1578,9 @@ V.addEventListener("change", e=>{
   if (d.moiobj) { const p = Object.assign({objectifs:{}}, st.perso.moi||{}); put("perso/moi", {...p, objectifs:{...p.objectifs, [d.moiobj]:+t.value||0}}); }
   if (d.moitxt) { const p = Object.assign({}, st.perso.moi||{}); put("perso/moi", {...p, [d.moitxt]:t.value}, "Enregistré"); }
 });
-V.addEventListener("input", e=>{ const id = e.target.id; if (["vQ","eqQ","volQ","hQ","pQ"].includes(id)) { ui.f[id]=e.target.value; render(); } });
+V.addEventListener("input", e=>{ const id = e.target.id; if (id==="lNom") { ui.f.lNom = e.target.value; const q = norm(e.target.value);
+    document.querySelectorAll("[data-nm]").forEach(c=>{ c.hidden = !!q && !c.dataset.nm.includes(q); }); return; }
+  if (["vQ","eqQ","volQ","hQ","pQ"].includes(id)) { ui.f[id]=e.target.value; render(); } });
 V.addEventListener("submit", async e=>{
   e.preventDefault(); const f = e.target, k = f.dataset.form;
   if (k==="newpilot") { const nom = val("npNom").trim(), mat = val("npMat").trim(); if (!nom) return;
@@ -1579,10 +1597,12 @@ V.addEventListener("submit", async e=>{
     if (st.opl[mat]) return toast("Ce matricule existe déjà : modifie la fiche existante.");
     return put("opl/"+mat, {nom:val("enNom").trim(), matricule:mat, groupe:g, total:tot, evalsRestantes:Math.max(0,tot-fa), exclus:[], programmes:[], echeance:val("enD")||"", ordre:100+Object.keys(st.opl).length,
       motif: g==="CIBLE"?val("enMotif"):"", simuRequis: g==="CIBLE"?(+val("enS")||0):0, simuFaits:0, checkLocal:"Validé", checkNav:"Validé"}, "Pilote ajouté"); }
-  if (k==="lacher") return add("instr", {nom:val("lNom").trim(), pos:val("lPos"), legsInit:+val("lLegs")||0, vols:[], preControle:"", cl:{requis:2,faits:0}, lache:""}, "Pilote ajouté");
+  if (k==="lacher") { const pk = pickPilot(val("lNom")); if (!pk.nom) return;
+    if (lacherList().some(x=>!x.lache && (norm(x.nom)===norm(pk.nom) || (pk.mat && x.mat===pk.mat)))) return toast(pk.nom+" est déjà en instruction.");
+    ui.f.lNom = ""; return add("instr", {nom:pk.nom, mat:pk.mat, pos:pk.pos==="CPT"?"CPT":(pk.pos==="FO"?"FO":val("lPos")), legsInit:+val("lLegs")||0, vols:[], preControle:"", cl:{requis:2,faits:0}, lache:""}, "Pilote ajouté"); }
   if (k==="vol") { const id = f.dataset.pid, p = st.instr[id]; delete ui.form["v"+id];
     return upd("instr/"+id, {vols:[...(p.vols||[]), {id:uid("v"), date:val("vd-"+id), instr:val("vi-"+id), vols:val("vv-"+id), legs:+val("vl-"+id)||2, safety:val("vs-"+id)||""}]}, "Vol enregistré"); }
-  if (k==="init") return add("init", {nom:val("iNom").trim(), pos:val("iPos"), heures:+val("iH")||0, lacheLe:""}, "Ajouté en ab initio");
+  if (k==="init") { const pk = pickPilot(val("iNom")); return add("init", {nom:pk.nom, mat:pk.mat, pos:pk.pos||val("iPos"), heures:+val("iH")||0, lacheLe:""}, "Ajouté en ab initio"); }
   if (k==="pair") { const a = val("pA"), b = norm(val("pB")); const hit = Object.values(st.init).find(p=>surname(p.nom)===surname(b) && norm(p.nom)!==norm(a));
     return toast(hit ? `Interdit : ${a} et ${hit.nom} sont tous les deux ab initio.` : "OK : l'autre membre n'est pas ab initio."); }
   if (k==="slot") { const [m,ji,si] = f.dataset.key.split("|"); const s = st.simu[m].jours[ji].slots[si], ni = val("sl-i").trim(), nc = val("sl-c").trim(); delete ui.form.slot;
@@ -1591,9 +1611,9 @@ V.addEventListener("submit", async e=>{
   if (k==="addslot") { const m = f.dataset.m, ji = +f.dataset.ji, sn = +val("as-s"); const J = JSON.parse(JSON.stringify(st.simu[m].jours));
     J[ji].slots.push({s:sn, h:SLOTS[sn-1], instr:val("as-i").trim(), crew:val("as-c").trim()}); J[ji].slots.sort((a,b)=>a.s-b.s); delete ui.form["add"+m+ji];
     await upd("simu/"+m, {jours:J}); return add("simulog", {date:T0, texte:`${dayLabel(J[ji].date)} S${sn} : nouvelle séance (${val("as-i")||"sans TRI"} · ${val("as-c")})`, notifie:false, cree:Date.now()}, "Séance ajoutée"); }
-  if (k==="valid") return add("valid", {nom:val("vaNom").trim(), fonction:val("vaFn"), items:{}}, "Pilote ajouté");
+  if (k==="valid") { const pk = pickPilot(val("vaNom")); return add("valid", {nom:pk.nom, mat:pk.mat, fonction:pk.pos||val("vaFn"), items:{}}, "Pilote ajouté"); }
   if (k==="cell") { const [id,type] = f.dataset.key.split("|"); const p = st.valid[id]; delete ui.form.cell; return upd("valid/"+id, {items:{...(p.items||{}), [type]:val("ce")}}, "Date enregistrée"); }
-  if (k==="max") return add("max", {nom:val("xNom").trim(), pos:val("xPos"), etape:val("xEt"), licenceOk:false, suiviInforme:false, progInforme:false}, "Pilote ajouté");
+  if (k==="max") { const pk = pickPilot(val("xNom")); return add("max", {nom:pk.nom, mat:pk.mat, pos:pk.pos||val("xPos"), etape:val("xEt"), licenceOk:false, suiviInforme:false, progInforme:false}, "Pilote ajouté"); }
 });
 
 render();
