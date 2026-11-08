@@ -18,7 +18,7 @@ html = ("<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n
         "<link rel=\"manifest\" href=\"manifest.webmanifest\">\n"
         "<link rel=\"apple-touch-icon\" href=\"icons/apple-touch-icon.png\">\n"
         "<link rel=\"icon\" type=\"image/png\" href=\"icons/icon-192.png\">\n"
-        "<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>\n"
+        "<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));}</script>\n"
         "<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}"
         "body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>\n"
         "</head>\n<body>\n" + body + "\n</body>\n</html>\n")
