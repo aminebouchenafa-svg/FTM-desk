@@ -241,6 +241,12 @@ details>summary{cursor:pointer;font:600 .84rem var(--font);color:var(--accent-in
 .tog[aria-checked="true"]{background:var(--grad);border-color:transparent}
 .tog[aria-checked="true"] i{left:27px}
 @media (prefers-reduced-motion:reduce){.tog i{transition:none}}
+/* liste de suggestions des champs de nom */
+.ac-pop{position:absolute;z-index:30;background:var(--surface);border:1px solid var(--line2);border-radius:14px;box-shadow:0 12px 30px rgba(20,10,60,.25);padding:4px;display:grid;max-height:330px;overflow:auto}
+.ac-pop button{display:flex;justify-content:space-between;align-items:baseline;gap:12px;text-align:left;border:0;background:none;color:var(--ink);font:500 .95rem var(--font);padding:11px 12px;border-radius:10px;cursor:pointer}
+.ac-pop button:first-child,.ac-pop button:hover{background:var(--chipbg)}
+.ac-pop span{color:var(--muted);font-size:.78rem;white-space:nowrap}
+.ac-pop b{font-weight:600}
 </style>
 
 <header>
@@ -1444,7 +1450,7 @@ function vMoi(){
 }
 
 /* --- Règles --- */
-const APP_VERSION = "8 nov. 2026 · v8 (séances PL, heures 75:45)";
+const APP_VERSION = "8 nov. 2026 · v9 (suggestions de noms)";
 function backupBlock(){
   if (!st.local) return "";
   return `<div class="card"><h3>Sauvegarde de cet appareil</h3>
@@ -1477,6 +1483,9 @@ function render(){
   const a = document.activeElement, fid = a && a.id, pos = fid && a.selectionStart;
   if (a && a.tagName==="TEXTAREA") return;  // ne pas écraser une saisie longue en cours
   $("#view").innerHTML = ({home:vHome, pilotes:vPilotes, fiche:vFiche, memos:vMemos, events:vEvents, lacher:vLacher, init:vInit, pl:vPL, evals:vEvals, simu:vSimu, valid:vValid, max:vMax, equipes:vEquipes, vols:vVols, dim:vDim, moi:vMoi, regles:vRegles}[ui.view]||vHome)();
+  $("#view").querySelectorAll("input[list]").forEach(i=>{ i.dataset.ac = i.getAttribute("list"); i.removeAttribute("list");
+    i.setAttribute("autocomplete","off"); i.setAttribute("autocorrect","off"); i.setAttribute("autocapitalize","off"); i.setAttribute("spellcheck","false"); });
+  acHide();
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos);}catch(e){} } }
 }
 function go(v){ ui.view=v; ui.form={}; try{localStorage.setItem("ftm.view",v);}catch(e){} render(); window.scrollTo(0,0); }
@@ -1628,6 +1637,49 @@ V.addEventListener("submit", async e=>{
   if (k==="cell") { const [id,type] = f.dataset.key.split("|"); const p = st.valid[id]; delete ui.form.cell; return upd("valid/"+id, {items:{...(p.items||{}), [type]:val("ce")}}, "Date enregistrée"); }
   if (k==="max") { const pk = pickPilot(val("xNom")); return add("max", {nom:pk.nom, mat:pk.mat, pos:pk.pos||val("xPos"), etape:val("xEt"), licenceOk:false, suiviInforme:false, progInforme:false}, "Pilote ajouté"); }
 });
+
+/* suggestions de noms : remplace la liste native, qui ne s'affiche pas sur iPad.
+   Cherche sur le début de chaque mot (« has » → Hasbellaoui) ou sur les initiales (« mr » → Meraghni Rabie). */
+const acPop = document.createElement("div"); acPop.className = "ac-pop"; acPop.hidden = true; document.body.appendChild(acPop);
+let acInput = null;
+function acOptions(id){ const dl = document.getElementById(id); return dl ? [...dl.options].map(o=>({v:o.value, l:o.textContent||""})) : []; }
+function acMatch(opts, q){
+  const nq = norm(q); if (!nq) return [];
+  const qs = nq.split(" "), out = [];
+  for (const o of opts) {
+    const n = norm(o.v), w = n.split(" "); let sc = -1;
+    if (n.startsWith(nq)) sc = 0;
+    else if (w.some(x=>x.startsWith(nq))) sc = 1;
+    else if (qs.length>1 && qs.every(t=>w.some(x=>x.startsWith(t)))) sc = 2;
+    else if (!nq.includes(" ") && nq.length>=2 && nq.length<=w.length && [...nq].every((c,i)=>w[i] && w[i][0]===c)) sc = 3;
+    else if (nq.length>=3 && n.includes(nq)) sc = 4;
+    if (sc>=0) out.push([sc, o]);
+  }
+  return out.sort((a,b)=>a[0]-b[0] || a[1].v.localeCompare(b[1].v)).slice(0,8).map(x=>x[1]);
+}
+function acPlace(){ if (!acInput) return; const r = acInput.getBoundingClientRect(), wd = Math.min(innerWidth-16, Math.max(240, r.width));
+  acPop.style.left = Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - wd - 8)) + "px";
+  acPop.style.top = (r.bottom + scrollY + 4) + "px"; acPop.style.width = wd + "px"; }
+function acHide(){ acPop.hidden = true; acInput = null; }
+function acShow(inp){
+  const part = inp.value.split("+").pop(), M = acMatch(acOptions(inp.dataset.ac), part);
+  if (!M.length || (M.length===1 && norm(M[0].v)===norm(part))) return acHide();
+  acInput = inp;
+  acPop.innerHTML = M.map(o=>`<button type="button" data-acv="${esc(o.v)}"><b>${esc(o.v)}</b>${o.l?`<span>${esc(o.l)}</span>`:""}</button>`).join("");
+  acPop.hidden = false; acPlace();
+}
+function acPick(v){
+  const inp = acInput; if (!inp) return;
+  const parts = inp.value.split("+"); parts[parts.length-1] = (parts.length>1 ? " " : "") + v; inp.value = parts.join("+");
+  acHide(); inp.dispatchEvent(new Event("input", {bubbles:true})); inp.dispatchEvent(new Event("change", {bubbles:true}));
+}
+document.addEventListener("input", e=>{ const t = e.target; if (t && t.dataset && t.dataset.ac) acShow(t); });
+document.addEventListener("focusin", e=>{ const t = e.target; if (t && t.dataset && t.dataset.ac && t.value) acShow(t); });
+acPop.addEventListener("pointerdown", e=>{ const b = e.target.closest("[data-acv]"); if (b) { e.preventDefault(); acPick(b.dataset.acv); } });
+document.addEventListener("pointerdown", e=>{ if (!acPop.hidden && !acPop.contains(e.target) && e.target!==acInput) acHide(); });
+document.addEventListener("keydown", e=>{ if (acPop.hidden) return; if (e.key==="Escape") acHide();
+  if (e.key==="Enter") { const b = acPop.querySelector("[data-acv]"); if (b) { e.preventDefault(); acPick(b.dataset.acv); } } });
+addEventListener("scroll", acPlace, {passive:true}); addEventListener("resize", acPlace);
 
 render();
 /* base locale (hors claude.ai, ex. GitHub Pages) : même interface, stockée dans ce navigateur */
