@@ -45,3 +45,4 @@ Briefing push chaque matin à 06:44 (Alger) : tâche planifiée « Briefing FTM 
 `index.html` = `ftm-desk.html` + squelette HTML, généré par `python3 tools/build_pages.py` (à relancer après chaque modification de `ftm-desk.html`).
 Hors claude.ai, la page utilise une base locale (localStorage `ftmdesk.db.v1`) avec export/import JSON (module Règles). Ne jamais mettre de données pilotes dans le dépôt : le site est public.
 Adresse : https://aminebouchenafa-svg.github.io/FTM-desk/ (branche claude/ftm-desk-dashboard, dossier racine).
+Application installable (PWA) : manifest.webmanifest, sw.js (cache hors connexion, changer CACHE à chaque version), icons/.

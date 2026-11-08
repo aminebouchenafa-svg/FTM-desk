@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FTM Desk">
+<meta name="theme-color" content="#3A1FA6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -794,7 +803,9 @@ function vHome(){
   const nW = A.filter(a=>a.k==="crit").length, nC = A.filter(a=>a.k==="warn").length;
   const hr = new Date().getHours();
   const banner = st.local ? `<div class="item ${Object.keys(st.opl).length?"info":"warn"}"><div class="txt"><b>Version GitHub : tes données restent sur cet appareil.</b><div class="sub">${Object.keys(st.opl).length?"Pense à exporter une sauvegarde de temps en temps.":"Importe ton fichier de sauvegarde pour retrouver tes pilotes."}</div></div><button class="b sm pri" data-go="regles">Sauvegarde</button></div>` : "";
-  return `${banner}<div class="hero"><h2>${hr<12?"Bonjour":hr<18?"Bon après-midi":"Bonsoir"}, Commandant</h2><p>${nW?`${nW} point${nW>1?"s":""} urgent${nW>1?"s":""} et ${nC} à suivre aujourd'hui.`:"Aucun point urgent aujourd'hui."}</p></div>
+  let standalone = false; try { standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches; } catch(e) {}
+  const install = st.local && !standalone ? `<div class="item info"><div class="txt"><b>Installer FTM Desk sur ton iPad</b><div class="sub">Dans Safari, touche Partager (carré avec flèche), puis « Sur l'écran d'accueil ». L'appli s'ouvre ensuite en plein écran, même hors connexion.</div></div></div>` : "";
+  return `${banner}${install}<div class="hero"><h2>${hr<12?"Bonjour":hr<18?"Bon après-midi":"Bonsoir"}, Commandant</h2><p>${nW?`${nW} point${nW>1?"s":""} urgent${nW>1?"s":""} et ${nC} à suivre aujourd'hui.`:"Aucun point urgent aujourd'hui."}</p></div>
   <div class="deck">
   <section class="du" style="grid-area:eicas"><div class="du-t">Alarmes <span>${nW} urgentes · ${nC} à suivre · ${A.length-nW-nC} infos</span></div>
     <div class="eicas">${A.length ? A.slice(0,10).map(a=>`<button class="msgl ${a.k}" data-go="${a.v}"><span class="m">${esc(a.t)}<span class="d">${esc(a.s)}</span></span></button>`).join("")
