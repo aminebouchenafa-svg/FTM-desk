@@ -39,6 +39,9 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 ## Calculateur simu
 Dans l'onglet Simu : remplacer un TRI, déplacer une séance, TRI indisponible sur une période. Contraintes dures : créneau libre, pas de personne en double, TRI ≤ 2 séances/jour, stagiaire 1/jour, repos S5→S1, ordre des séances d'une PEQ. Score = charge du TRI, séances voisines, écart de date. `ref/regles.plMode` = "ou" | "et" pour la fin d'instruction PL.
 
+## Fichiers Apple Numbers
+`tools/import_simu_numbers.py <fichier.numbers> <sortie.json>` (dans un venv avec `pip install numbers-parser`, lancer avec `python -I`) : lit NOV/DEC/JAN et sort un JSON par mois. Archiver l'ancienne version d'un mois dans la collection `archive` avant de la remplacer.
+
 ## Règle métier
 Aucun pilote ne fait deux vols d'évaluation avec le même TRI (règle confirmée par le FTM).
 Des vols du même TRI sur des jours consécutifs = une seule rotation, donc une seule éval.

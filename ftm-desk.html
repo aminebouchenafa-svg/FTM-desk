@@ -1106,6 +1106,27 @@ function optIndispo(triName, from, to){
   });
   return plan;
 }
+/* remplir toutes les séances sans TRI d'un mois, en répartissant la charge */
+function optFill(mois, exclKeys){
+  const S = allSlots().filter(x=>x.mois===mois && x.date>=T0 && isEmptySlot(x));
+  const plan = [], extra = {};
+  S.forEach(x=>{
+    const busy = o => plan.some(p=>p.k===o.k && ((p.date===x.date && p.s===x.s) || (Math.abs(daysTo(p.date)-daysTo(x.date))===1 && ((p.s===5 && x.s===1) || (p.s===1 && x.s===5)))))
+      || plan.filter(q=>q.k===o.k && q.date===x.date).length + sessionsOn(x.date).filter(y=>instrNames(y.instr).includes(o.k)).length >= 2;
+    const best = optReplace(x, extra).filter(o=>!exclKeys.includes(o.k) && !busy(o))[0];
+    if (best) extra[best.k] = (extra[best.k]||0) + 1;
+    plan.push({sess:x, k:best&&best.k, n:best&&best.n, sc:best?best.sc:0, why:best?best.why:["aucun TRI libre"], date:x.date, s:x.s});
+  });
+  return plan;
+}
+async function applyFill(){
+  const mois = F("asMonth",""), excl = String(F("asExcl","")).split(",").map(surname).filter(Boolean);
+  const plan = optFill(mois, excl).filter(p=>p.k); if (!plan.length) return;
+  const J = JSON.parse(JSON.stringify(st.simu[mois].jours));
+  plan.forEach(p=>{ J[p.sess.ji].slots[p.sess.si].instr = p.n; });
+  await upd("simu/"+mois, {jours:J});
+  await add("simulog", {date:T0, texte:`TRI affectés (${plan.length} séances) : ` + plan.map(p=>`${frDate(p.date).slice(0,5)} S${p.s} ${p.n}`).join(" ; "), notifie:false, cree:Date.now()}, `${plan.length} TRI affectés`);
+}
 const scLbl = sc => sc>=80 ? ["ok","Très favorable"] : sc>=60 ? ["info","Possible"] : ["warn","Difficile"];
 function scBar(sc){ const [k,l] = scLbl(sc); return `<div class="row" style="gap:6px;flex-wrap:nowrap"><div class="gauge ${k==="ok"?"ok":k==="warn"?"warn":""}" style="width:90px;flex:0 0 90px"><i style="width:${sc}%"></i></div><b class="${k==="ok"?"c-grn":k==="warn"?"c-amb":"c-cyn"}">${sc}%</b><span class="note">${l}</span></div>`; }
 const sessLabel = x => `${dayLabel(x.date)} · S${x.s} · ${x.crew||"—"} · ${isEmptySlot(x)?"TRI à trouver":(x.instr||"—")}`;
@@ -1130,6 +1151,19 @@ function vCalc(){
         (O.length ? `<div class="list">${O.map(o=>`<div class="item ${scLbl(o.sc)[0]}"><div class="txt"><b>${dayLabel(o.date)} · S${o.s} ${SLOTS[o.s-1]}</b><div class="sub">${esc(o.triNote)} · créneau libre · repos OK${peopleOf(sess).crew.some(c=>c.startsWith("PEQ"))?" · ordre de la PEQ respecté":""}</div>${scBar(o.sc)}</div><button class="b sm pri" data-calcmove="${slotKey(sess)}" data-to="${o.mois}|${o.ji}|${o.s}" data-tri="${esc(o.newTri||"")}">Déplacer ici</button></div>`).join("")}</div>`
           : `<div class="item warn"><div class="txt">Aucun créneau libre sans conflit à ± 7 jours${keep?" avec le même TRI. Essaie « TRI libre accepté »":""}.</div></div>`);
     }
+  } else if (mode==="fill") {
+    const months = [...new Set(allSlots().filter(x=>x.date>=T0 && isEmptySlot(x)).map(x=>x.mois))].sort();
+    const mo = months.includes(F("asMonth","")) ? F("asMonth","") : (months[0]||""); ui.f.asMonth = mo;
+    const excl = String(F("asExcl","")).split(",").map(surname).filter(Boolean);
+    const plan = mo ? optFill(mo, excl) : [], okN = plan.filter(p=>p.k).length;
+    const MN = m => { const [y,mm]=m.split("-"); return MOIS[+mm-1]+" "+y; };
+    const load = {}; plan.forEach(p=>{ if (p.k) load[p.n]=(load[p.n]||0)+1; });
+    body = months.length ? `<div class="seg">${months.map(m=>`<button data-fset="asMonth" data-val="${m}" aria-pressed="${m===mo}">${MN(m)} (${allSlots().filter(x=>x.mois===m && x.date>=T0 && isEmptySlot(x)).length})</button>`).join("")}</div>
+      <label class="fld wide"><span>TRI à ne pas utiliser (congé, indisponible), séparés par des virgules</span><input type="text" id="asExcl" value="${esc(F("asExcl",""))}" placeholder="Ex. : Laliki, Iddir"></label>
+      <div class="note">Répartition proposée : ${Object.entries(load).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${esc(n)} ${c}`).join(" · ")||"—"}</div>
+      ${okN?`<button class="b pri" data-calcfill="1">Appliquer les ${okN} affectations</button>`:""}
+      <details><summary>Détail des ${plan.length} séances</summary><div class="list" style="margin-top:6px">${plan.map(p=>`<div class="item ${p.k?scLbl(p.sc)[0]:"crit"}"><div class="txt"><b>${esc(sessLabel(p.sess))}</b><div class="sub">${p.k?"TRI proposé : "+esc(p.n)+" · "+p.sc+"%":"Aucun TRI libre : à traiter à la main"}</div></div></div>`).join("")}</div></details>`
+      : `<div class="note">Aucune séance à venir sans TRI. Tout est affecté.</div>`;
   } else {
     const tri = F("asTri",""), from = F("asFrom",T0), to = F("asTo",addDays(T0,7));
     const plan = tri ? optIndispo(tri, from, to) : [];
@@ -1140,7 +1174,7 @@ function vCalc(){
          ${okN?`<button class="b pri" data-calcall="1">Appliquer les ${okN} remplacement${okN>1?"s":""}</button>`:""}` : `<div class="note">Aucune séance de ce TRI sur la période.</div>`);
   }
   return `<section class="du"><div class="du-t">Calculateur de changements <span>sans chevauchement</span></div>
-    <div class="seg">${[["rempl","Remplacer un TRI"],["depl","Déplacer une séance"],["indispo","TRI indisponible"]].map(([k,l])=>`<button data-fset="asMode" data-val="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
+    <div class="seg">${[["fill","Remplir les TRI d'un mois"],["rempl","Remplacer un TRI"],["depl","Déplacer une séance"],["indispo","TRI indisponible"]].map(([k,l])=>`<button data-fset="asMode" data-val="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
     ${body}
     <div class="note">Vérifié pour chaque option : créneau libre, personne en double, au plus 2 séances par TRI et 1 par stagiaire et par jour, repos entre S5 et S1, ordre des séances de la PEQ. Le pourcentage classe les options (charge du TRI, écart de date). Chaque changement s'ajoute au mail du CSV Kouba.</div>
   </section>`;
@@ -1378,6 +1412,7 @@ V.addEventListener("click", async e=>{
     return setSlot(m,+ji,+si,{instr:d.val}, `${dayLabel(j.date)} S${x.s} : TRI ${x.instr||"(vide)"} → ${d.val}`); }
   if (d.calcmove) return applyMove(d.calcmove, d.to, d.tri||"");
   if (d.calcall) return applyIndispo();
+  if (d.calcfill) return applyFill();
   if (d.export && st.db.exportAll) { const blob = new Blob([JSON.stringify(st.db.exportAll(), null, 1)], {type:"application/json"}); const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "ftm-desk-sauvegarde-"+T0+".json"; document.body.appendChild(a); a.click(); a.remove(); return toast("Sauvegarde exportée"); }
   if (d.colres!=null && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), resultat:d.colres}}, d.colres?"Résultat du collège : "+d.colres:"Résultat effacé"); }
@@ -1444,7 +1479,7 @@ V.addEventListener("change", e=>{
   if (t.id && t.id.startsWith("tri-")) ui.form[t.id.slice(4)].tri = t.value;
   if (t.id && t.id.startsWith("date-")) ui.form[t.id.slice(5)].date = t.value;
   if (t.id==="impFile" && t.files && t.files[0]) { const fr = new FileReader(); fr.onload = () => { try { const obj = JSON.parse(fr.result); if (!obj || typeof obj!=="object") throw 0; st.db.importAll(obj); toast("Données importées"); } catch(e) { toast("Fichier illisible : choisis le fichier ftm-desk-sauvegarde."); } }; fr.readAsText(t.files[0]); return; }
-  if (["asSess","asTri","asFrom","asTo"].includes(t.id)) { ui.f[t.id] = t.value; return render(); }
+  if (["asSess","asTri","asFrom","asTo","asExcl"].includes(t.id)) { ui.f[t.id] = t.value; return render(); }
   if (d.regletxt) { put("ref/regles", {...(st.ref.regles||{}), [d.regletxt]:t.value}, "Règle enregistrée"); return; }
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
   if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
