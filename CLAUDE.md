@@ -17,6 +17,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 - `valid/*` : validités {nom, fonction, items{CL, IC, IL, Check TRI, CRM, DGR, SMS, Sûreté, SSP1, SSP2: date d'expiration AAAA-MM-JJ}}.
 - `max/*` : formation MAX {nom, pos, etape, licenceOk, suiviInforme, progInforme}.
 - `simulog/*` : changements simu à notifier au CSV Kouba {date, texte, notifie}.
+- `ref/linecheck` : état DO du contrôle en ligne {rows[{id, nom, base, ac, pos CP|FO, last, expiry, planned (date = échéance suivante), plannedTxt (P = programmé, ABS = absent, a suivre), note}]} ; fallback du line check sur la fiche et tableau dans Validités.
 - `ref/pilotes` : annuaire {rows[{id, nom, mat, fonction CPT|FO, sources}]} ; la fiche pilote relie les modules par matricule, sinon par NOM + 3 lettres du prénom.
 - `fiches/<id pilote>` : saisies manuelles de la fiche {dernierSimu, prochainSimu, licence, note, fonction (prioritaire sur l'annuaire), sorti{motif, date}} ; `sorti` = hors secteur (caché des listes, filtre « Sortis »).
 - Dans `opl`, `college` {date, resultat Admis|Ajourné, qtDate} après les 5 évals : parcours PL → check local → check nav → évals → collège CDB → QT ATR.

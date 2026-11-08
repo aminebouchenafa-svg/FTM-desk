@@ -381,6 +381,20 @@ const memos = () => Object.entries(st.memos).map(([id,d])=>({id,...d}));
 const events = () => Object.entries(st.events).map(([id,d])=>({id,...d})).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 function memoLevel(m){ if (m.fait) return "ok"; if (!m.echeance) return "info"; const n = daysTo(m.echeance); return n<0?"crit":(n<=2?"crit":(n<=7?"warn":"info")); }
 
+/* ---------- contrôles en ligne (état DO) ---------- */
+const lcRows = () => (st.ref.linecheck && st.ref.linecheck.rows) || [];
+function lcStatus(r){
+  if (!r) return null;
+  if (r.planned) return {k:"ok", t:"Échéance suivante "+frDate(r.planned), exp:r.planned};
+  const tx = (r.plannedTxt||"").toLowerCase();
+  if (tx==="abs") return {k:"mute", t:"Absent (non programmé)", exp:r.expiry};
+  if (tx==="p") return r.expiry && r.expiry < T0 ? {k:"warn", t:"Expiré, programmé", exp:r.expiry} : {k:"info", t:"Programmé", exp:r.expiry};
+  if (tx.startsWith("a suivre")) return {k:"warn", t:"À suivre"+(r.note?" · "+r.note:""), exp:r.expiry};
+  if (r.expiry && r.expiry < T0) return {k:"crit", t:"Expiré, non programmé", exp:r.expiry};
+  if (r.expiry && daysTo(r.expiry) <= 30) return {k:"warn", t:"Expire dans "+daysTo(r.expiry)+" j", exp:r.expiry};
+  return {k:"ok", t:"Valide", exp:r.expiry};
+}
+
 /* ---------- licences ---------- */
 const lics = () => (st.ref.licences && st.ref.licences.rows) || [];
 function licStatus(r){
@@ -452,6 +466,9 @@ function alerts(){
   allSlots().filter(s=>s.date>=T0 && s.date<=addDays(T0,14) && isEmptySlot(s)).forEach(s=>A.push({k: daysTo(s.date)<=3?"crit":"warn", v:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
   const nlog = Object.values(st.simulog).filter(l=>!l.notifie).length;
   if (nlog) A.push({k:"warn", v:"simu", t:`${nlog} changement${nlog>1?"s":""} simu à notifier au CSV Kouba`, s:"Message prêt à copier dans l'onglet Simu"});
+  // contrôles en ligne (état DO)
+  lcRows().forEach(x=>{ const s2 = lcStatus(x); if (s2.k==="crit") A.push({k:"crit", v:"valid", t:`${x.nom} : contrôle en ligne expiré le ${frDate(x.expiry)}`, s:"Non programmé"});
+    else if (s2.k==="warn" && !(x.plannedTxt||"").toLowerCase().startsWith("a suivre")) A.push({k:"warn", v:"valid", t:`${x.nom} : contrôle en ligne`, s:s2.t+(x.expiry?" · expire le "+frDate(x.expiry):"")}); });
   // validités
   validList().forEach(p=>Object.entries(p.items||{}).forEach(([t,d])=>{ const lv = cellLevel(d); if (lv==="crit"||lv==="warn") A.push({k:lv, v:"valid", t:`${p.nom} : ${t} ${lv==="crit"?"expiré":"expire"} le ${frDate(d)}`, s: lv==="crit"?"À reprogrammer":"Moins de 30 jours"}); }));
   const nl = lics().filter(x=>licStatus(x).k==="crit").length;
@@ -545,7 +562,7 @@ function pilotStatus(p, I){
     if (c.resultat==="Ajourné") return {t:"AJOURNÉ AU COLLÈGE", c:"c-amb", phase:"college"};
     return {t:"COLLÈGE CDB "+frDate(c.date||COLLEGE_DATE).slice(0,5), c:"c-mag", phase:"college"}; }
   if (I.instr && !I.instr.lache) { const L = legsOf(I.instr); return {t:`INSTR LIGNE ${L}/${r.legsLacher}`, c: L>=r.legsAlerte?"c-red":(L>=r.legsAlerte-6?"c-amb":"c-mag"), phase:"instr"}; }
-  if (I.init && (I.init.heures||0) < r.initHeures) return {t:`AB INITIO ${I.init.heures||0}H`, c:"c-amb", phase:"init"};
+  if (I.init && (I.init.heures||0) < r.initHeures) return {t: I.init.heures==null ? "AB INITIO" : `AB INITIO ${I.init.heures}H`, c:"c-amb", phase:"init"};
   if (I.opl && inEval(I.opl) && (I.opl.evalsRestantes||0)>0) return {t:`${(I.opl.groupe||"OPL")==="CDB"?"EVAL CDB":(I.opl.groupe==="CIBLE"?"CIBLÉ":"EVAL")} ${faits(I.opl)}/${I.opl.total||r.evalsStd}`, c: evLevel(I.opl)==="crit"?"c-red":"c-mag", phase:"eval"};
   if (I.opl && !inEval(I.opl)) { if (I.opl.checkLocal==="Instruction PL") return {t:"INSTR PL", c:"c-mag", phase:"pl"};
     const pl = chkPending(I.opl.checkLocal), pn = chkPending(I.opl.checkNav);
@@ -655,7 +672,8 @@ function vFiche(){
     return i===cur?"act":(i<cur?"done":""); };
   /* valeurs auto (planning) et saisies */
   const autoLast = sim.last ? sim.last.date : "", autoNext = sim.next ? sim.next.date : "";
-  const cl = I.valid && I.valid.items && I.valid.items.CL || "";
+  const lcr = lcRows().find(x=>(p.mat && x.id===String(p.mat)) || sameP(p, x.nom, x.id)), lcs = lcStatus(lcr);
+  const cl = (I.valid && I.valid.items && I.valid.items.CL) || (lcs ? lcs.exp : "") || "";
   const licIso = fx.licence || (I.lic ? frToIso(I.lic.validite) : "");
   const L = ins ? legsOf(ins) : 0;
   const lv = d => { const k = cellLevel(d); return k==="crit"?"crit":k==="warn"?"warn":""; };
@@ -680,10 +698,10 @@ function vFiche(){
     <div class="flds">
       ${fld("Dernier simu","dernierSimu","date", fx.dernierSimu||autoLast, !fx.dernierSimu&&autoLast?"d'après le planning":"")}
       ${fld("Prochain simu","prochainSimu","date", fx.prochainSimu||autoNext, !fx.prochainSimu&&autoNext?`planning : S${sim.next.s} ${esc(sim.next.instr||"TRI ?")}`:"")}
-      ${fld("Line check (expire le)","lineCheck","date", cl, cl&&cellLevel(cl)==="crit"?"expiré":"", lv(cl))}
+      ${fld("Line check (expire le)","lineCheck","date", cl, lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? "État DO : "+esc(lcs.t)+(lcr.last?" · dernier "+frDate(lcr.last):"") : (cl&&cellLevel(cl)==="crit"?"expiré":""), lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? (lcs.k==="crit"?"crit":lcs.k==="warn"?"warn":"") : lv(cl))}
       ${fld("Licence (valide jusqu'au)","licence","date", licIso, "", lv(licIso))}
       ${ins?fld(`Legs (sur ${r.legsLacher})`,"legs","number", L, L>=r.legsAlerte?"alarme 36 legs":"", L>=r.legsAlerte?"crit":""):""}
-      ${I.init?fld(`Heures ab initio (sur ${r.initHeures})`,"heures","number", I.init.heures||0, ""):""}
+      ${I.init?fld(`Heures ab initio (sur ${r.initHeures})`,"heures","number", I.init.heures??"", I.init.heures==null?"à compléter":""):""}
       ${o&&inEval(o)?fld(`Évals faites (sur ${o.total||r.evalsStd})`,"evalsFaites","number", faits(o), ""):""}
       ${o&&os==="pl"?fld(`Heures PL (sur ${r.plHeures})`,"plHeures","number", o.plHeures||0, ""):""}
       ${o&&os==="pl"?fld(`Étapes PL (sur ${r.plEtapes})`,"plEtapes","number", o.plEtapes||0, ""):""}
@@ -1029,7 +1047,19 @@ function vValid(){
   const r = R(), types = r.validTypes, P = validList().sort((a,b)=>a.nom.localeCompare(b.nom)), q = norm(F("vQ",""));
   const L = P.filter(p=>!q || norm(p.nom).includes(q));
   const ec = ui.form.cell;
-  return `<div class="note">Contrôle en ligne valable ${r.clMois} mois. Rouge : expiré · orange : moins de 30 jours. Touche une case pour saisir la date d'expiration.</div>
+  const LC = lcRows(), lf = F("lcF","todo"), lq = norm(F("vQ",""));
+  const order = {crit:0,warn:1,info:2,mute:3,ok:4};
+  const LCf = LC.map(x=>({...x, s:lcStatus(x)})).filter(x=>!lq || norm(x.nom).includes(lq) || x.id.includes(lq))
+    .filter(x=> lf==="all" || (lf==="todo" ? ["crit","warn"].includes(x.s.k) : lf==="prog" ? x.s.k==="info" : lf==="abs" ? x.s.k==="mute" : x.s.k==="ok"))
+    .sort((a,b)=>order[a.s.k]-order[b.s.k] || String(a.s.exp).localeCompare(String(b.s.exp)));
+  const cnt = k => LC.filter(x=>{ const s2 = lcStatus(x).k; return k==="todo" ? ["crit","warn"].includes(s2) : k==="prog" ? s2==="info" : k==="abs" ? s2==="mute" : s2==="ok"; }).length;
+  const lcBlock = LC.length ? `<section class="du"><div class="du-t">Contrôles en ligne B737 <span>${esc((st.ref.linecheck&&st.ref.linecheck.source)||"")}</span></div>
+    <div class="seg">${[["todo","À traiter"],["prog","Programmés"],["abs","Absents"],["ok","À jour"],["all","Tous"]].map(([k,l])=>`<button data-fset="lcF" data-val="${k}" aria-pressed="${k===lf}">${l} (${k==="all"?LC.length:cnt(k)})</button>`).join("")}</div>
+    <div class="tbl"><table><thead><tr><th>Pilote</th><th>Pos</th><th>Dernier</th><th>Expire</th><th>État</th></tr></thead><tbody>
+    ${LCf.slice(0,200).map(x=>{ const pp = registry().find(y=>(y.mat && y.mat===x.id) || sameP(y, x.nom, x.id));
+      return `<tr><td>${pp?`<button class="link" data-pilot="${esc(pp.id)}"><b>${esc(x.nom)}</b></button>`:`<b>${esc(x.nom)}</b>`}<div class="mono">${esc(x.id)} · ${esc(x.base)}</div></td><td>${esc(x.pos==="CP"?"CPT":x.pos)}</td><td class="num">${frDate(x.last)}</td><td class="num">${frDate(x.expiry)}</td><td><span class="pill ${x.s.k==="mute"?"mute":x.s.k}">${esc(x.s.t)}</span></td></tr>`; }).join("") || `<tr><td colspan="5" class="note">Aucun pilote dans ce filtre.</td></tr>`}
+    </tbody></table></div></section>` : "";
+  return `${lcBlock}<div class="note">Contrôle en ligne valable ${r.clMois} mois. Rouge : expiré · orange : moins de 30 jours. Touche une case pour saisir la date d'expiration.</div>
   <form class="form" data-form="valid"><input type="text" id="vaNom" class="grow" placeholder="Pilote" required><select id="vaFn"><option>CPT</option><option>FO</option><option>TRI</option></select><button class="b pri" type="submit">Ajouter</button></form>
   <input type="search" id="vQ" placeholder="Chercher un pilote…" value="${esc(F("vQ",""))}">
   ${L.length?`<div class="tbl"><table><thead><tr><th>Pilote</th>${types.map(t=>`<th>${esc(t)}</th>`).join("")}<th></th></tr></thead><tbody>
