@@ -1444,12 +1444,14 @@ function vMoi(){
 }
 
 /* --- Règles --- */
+const APP_VERSION = "8 nov. 2026 · v8 (séances PL, heures 75:45)";
 function backupBlock(){
   if (!st.local) return "";
   return `<div class="card"><h3>Sauvegarde de cet appareil</h3>
     <div class="note">Ici, les données sont gardées dans ce navigateur. Exporte-les régulièrement pour ne rien perdre, et importe ton fichier de sauvegarde sur un autre appareil.</div>
     <div class="row"><button class="b pri" data-export="1">Exporter mes données</button>
-    <label class="b" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">Importer un fichier<input type="file" id="impFile" accept=".json,application/json" hidden></label></div></div>`;
+    <label class="b" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">Importer un fichier<input type="file" id="impFile" accept=".json,application/json" hidden></label></div></div>
+    <div class="card"><h3>Version de l'appli</h3><div class="note">${APP_VERSION}</div><div class="row"><button class="b" data-forceupd="1">Forcer la mise à jour</button></div><div class="note">Tes données restent sur l'iPad.</div></div>`;
 }
 function vRegles(){
   const r = R(); const fld = (k,l) => `<label>${l}<input type="number" min="0" value="${r[k]}" data-regle="${k}"></label>`;
@@ -1496,6 +1498,7 @@ V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.pilot) return openPilot(d.pilot);
+  if (d.forceupd) { try { const ks = await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r=>r.unregister())); } catch(err) {} location.reload(); return; }
   if (d.calctoggle) { ui.f.calcOpen = !ui.f.calcOpen; return render(); }
   if (d.calcopen) { ui.f.calcOpen = true; ui.f.asSess = d.calcopen; ui.f.asMode = d.mode; delete ui.form.slot; render(); window.scrollTo(0,0); return; }
   if (d.calcset) { const [m,ji,si] = d.calcset.split("|"); const j = st.simu[m].jours[+ji], x = j.slots[+si];
