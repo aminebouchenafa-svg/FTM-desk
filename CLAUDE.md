@@ -33,6 +33,9 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
    Un même TRI sur plusieurs jours pour le même OPL = une seule éval (règle : un TRI différent par vol).
 4. Signaler à l'utilisateur les cas ambigus.
 
+## Quand l'utilisateur envoie un planning simu (Excel)
+`python3 tools/import_simu.py <fichier> "<feuille>" <AAAA-MM> <sortie.json>` puis `set` sur `simu/<AAAA-MM>` (lire la version avant ; si le mois a des modifications non notifiées dans `simulog`, demander avant d'écraser).
+
 ## Règle métier
 Aucun pilote ne fait deux vols d'évaluation avec le même TRI (règle confirmée par le FTM).
 Des vols du même TRI sur des jours consécutifs = une seule rotation, donc une seule éval.
