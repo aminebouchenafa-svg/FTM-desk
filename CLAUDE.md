@@ -38,7 +38,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 `python3 tools/import_simu.py <fichier> "<feuille>" <AAAA-MM> <sortie.json>` puis `set` sur `simu/<AAAA-MM>` (lire la version avant ; si le mois a des modifications non notifiées dans `simulog`, demander avant d'écraser).
 
 ## Calculateur simu
-Dans l'onglet Simu : remplacer un TRI, déplacer une séance, TRI indisponible sur une période. Contraintes dures : créneau libre, pas de personne en double, TRI ≤ 2 séances/jour, stagiaire 1/jour, repos S5→S1, ordre des séances d'une PEQ. Score = charge du TRI, séances voisines, écart de date. `ref/regles.plMode` = "ou" | "et" pour la fin d'instruction PL.
+Dans l'onglet Simu : remplacer un TRI, déplacer une séance, TRI indisponible sur une période. Contraintes dures : créneau libre, pas de personne en double, TRI ≤ 2 séances/jour, stagiaire 1/jour, repos S5→S1, ordre des séances d'une PEQ. Score = charge du TRI, séances voisines, écart de date. `ref/regles.plMode` = "ou" | "et" pour la fin d'instruction PL. PL = 100 h ou 25 SÉANCES (champ `plEtapes` = séances) ; `plSecteurs` = secteurs volés du suivi PL (info seulement). Heures saisies au format 75:45.
 
 ## Fichiers Apple Numbers
 `tools/import_simu_numbers.py <fichier.numbers> <sortie.json>` (dans un venv avec `pip install numbers-parser`, lancer avec `python -I`) : lit NOV/DEC/JAN et sort un JSON par mois. Archiver l'ancienne version d'un mois dans la collection `archive` avant de la remplacer.

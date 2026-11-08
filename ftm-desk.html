@@ -282,6 +282,13 @@ async function add(col, data, ok){ if(!st.db) return toast("Base indisponible.")
 /* ---------- règles (modifiables, à confirmer avec le Manex D) ---------- */
 const DEF_REGLES = { legsLacher:40, legsAlerte:36, legsSafety:4, plHeures:100, plEtapes:25, initHeures:150, evalsStd:5, clMois:12, simuMois:6,
   validTypes:["CL","IC","IL","Check TRI","CRM","DGR","SMS","Sûreté","SSP1","SSP2"], manexConfirme:false, plMode:"ou" };
+/* heures : accepte 75:45, 75h45, 75,75 ou 75.5 ; affiche 75:45 */
+function parseHours(v){
+  const t = String(v||"").trim().replace(",", ".");
+  let m = t.match(/^(\d+)\s*[:hH]\s*(\d{1,2})?$/); if (m) return Math.round((+m[1] + (+(m[2]||0))/60)*100)/100;
+  m = t.match(/^\d+(\.\d+)?$/); const hv = m ? Math.round(+t*100)/100 : null; return hv!=null && hv > 1500 ? null : hv;
+}
+const fmtHours = h => { if (h==null || h==="") return ""; const tot = Math.round(+h*60); return Math.floor(tot/60)+":"+String(tot%60).padStart(2,"0"); };
 const plDone = o => { const r = R(), h = (o.plHeures||0) >= r.plHeures, e = (o.plEtapes||0) >= r.plEtapes; return r.plMode==="et" ? (h && e) : (h || e); };
 const R = () => Object.assign({}, DEF_REGLES, st.ref.regles||{});
 const CAUSES = [["CGML","Maladie (CGML)"],["ABS","Absence pilote"],["IRGAV","Irrégularité avion"],["AMP","Amplitude"],["ABSTRI","Absence TRI"],["SOLL","Sollicitation"]];
@@ -751,10 +758,10 @@ function vFiche(){
       ${fld("Line check (expire le)","lineCheck","date", cl, lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? "État DO : "+esc(lcs.t)+(lcr.last?" · dernier "+frDate(lcr.last):"") : (cl&&cellLevel(cl)==="crit"?"expiré":""), lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? (lcs.k==="crit"?"crit":lcs.k==="warn"?"warn":"") : lv(cl))}
       ${fld("Licence (valide jusqu'au)","licence","date", licIso, "", lv(licIso))}
       ${ins?fld(`Legs (sur ${r.legsLacher})`,"legs","number", L, L>=r.legsAlerte?"alarme 36 legs":"", L>=r.legsAlerte?"crit":""):""}
-      ${I.init?fld(`Heures ab initio (sur ${r.initHeures})`,"heures","number", I.init.heures??"", I.init.heures==null?"à compléter":""):""}
+      ${I.init?fld(`Heures ab initio (sur ${r.initHeures} h)`,"heures","text", fmtHours(I.init.heures), I.init.heures==null?"à compléter · format 75:45":"format 75:45"):""}
       ${o&&inEval(o)?fld(`Évals faites (sur ${o.total||r.evalsStd})`,"evalsFaites","number", faits(o), ""):""}
-      ${o&&os==="pl"?fld(`Heures PL (sur ${r.plHeures})`,"plHeures","number", o.plHeures||0, ""):""}
-      ${o&&os==="pl"?fld(`Étapes PL (sur ${r.plEtapes})`,"plEtapes","number", o.plEtapes||0, ""):""}
+      ${o&&os==="pl"?fld(`Heures PL (sur ${r.plHeures} h)`,"plHeures","text", fmtHours(o.plHeures||0), "format 75:45"):""}
+      ${o&&os==="pl"?fld(`Séances PL (sur ${r.plEtapes})`,"plEtapes","number", o.plEtapes??"", o.plSecteurs!=null?`suivi PL : ${o.plSecteurs} secteurs volés`:(o.plEtapes==null?"à compléter":"")):""}
     </div>
     ${o&&os==="checks"?`<div class="list">${[["checkLocal","Check local (vol local)"],["checkNav","Check nav"]].filter(([f])=>chkOn(o[f])).map(([f,l])=>{ const v = o[f]||"En attente", ok = v==="Validé", dt = o[f+"Date"];
       return `<div class="item ${ok?"ok":"warn"}"><div class="txt"><b>${l}</b><div class="sub">${ok?"Validé"+(dt?" le "+frDate(dt):""):esc(v)}</div></div>
@@ -781,7 +788,7 @@ function vFiche(){
     <div class="sws">
       ${sw("instr","Instruction ligne", !!ins, ins?`${L}/${r.legsLacher} legs${ins.lache?" · lâché le "+frDate(ins.lache):""}`:"")}
       ${sw("init","Ab initio", !!I.init, I.init?`${I.init.heures||0} h sur ${r.initHeures}`:"")}
-      ${sw("pl","Instruction PL", os==="pl", os==="pl"?`${o.plHeures||0} h · ${o.plEtapes||0} étapes`:"")}
+      ${sw("pl","Instruction PL", os==="pl", os==="pl"?`${fmtHours(o.plHeures||0)} h · ${o.plEtapes??"?"} séances`:"")}
       ${sw("local","Check local (vol local)", os==="checks" && chkOn(o.checkLocal), os==="checks" && chkOn(o.checkLocal) ? (o.checkLocal==="Validé"?"Validé"+(o.checkLocalDate?" le "+frDate(o.checkLocalDate):""):esc(o.checkLocal)) : "")}
       ${sw("nav","Check nav", os==="checks" && chkOn(o.checkNav), os==="checks" && chkOn(o.checkNav) ? (o.checkNav==="Validé"?"Validé"+(o.checkNavDate?" le "+frDate(o.checkNavDate):""):esc(o.checkNav)) : "")}
       ${sw("OPL","Évaluation OPL", os==="OPL", evDetail("OPL"))}
@@ -828,6 +835,9 @@ async function saveField(p, f, value){
   if (["dernierSimu","prochainSimu","licence","note","fonction","simuExp"].includes(f)) return put("fiches/"+p.id, {...(st.fiches[p.id]||{}), [f]:value}, "Enregistré");
   if (f==="lineCheck") { if (I.valid) return upd("valid/"+I.valid.id, {items:{...(I.valid.items||{}), CL:value}}, "Line check enregistré");
     return put("valid/"+key, {nom:p.nom, mat:p.mat||"", fonction:p.fonction||"", items:{CL:value}}, "Line check enregistré"); }
+  if (f==="plHeures" || f==="heures") { const hv = parseHours(value); if (hv==null) return toast("Heures non comprises : écris par exemple 75:45");
+    if (f==="heures" && I.init) return upd("init/"+I.init.id, {heures:hv}, "Heures enregistrées : "+fmtHours(hv));
+    if (I.opl) return upd("opl/"+I.opl.matricule, {plHeures:hv}, "Heures PL enregistrées : "+fmtHours(hv)); return; }
   const n = Math.max(0, +value||0);
   if (f==="legs" && I.instr) { const vl = (I.instr.vols||[]).reduce((a,v)=>a+(+v.legs||0),0); return upd("instr/"+I.instr.id, {legsInit: Math.max(0, n - vl)}, "Legs enregistrés"); }
   if (f==="heures" && I.init) return upd("init/"+I.init.id, {heures:n}, "Heures enregistrées");
@@ -838,7 +848,7 @@ async function saveField(p, f, value){
 /* ================= VUES ================= */
 const MODULES = [
   ["pilotes","Pilotes","Annuaire, fiches"],["lacher","Lâcher","Legs · safety · CL"],["init","Ab initio","< 150 h après lâcher"],
-  ["pl","Instr. PL","Heures · étapes · checks"],["evals","Évals","OPL · CDB · ciblé"],["simu","Simu","Planning · permut."],
+  ["pl","Instr. PL","Heures · séances · checks"],["evals","Évals","OPL · CDB · ciblé"],["simu","Simu","Planning · permut."],
   ["valid","Validités","CL · IC · IL · sol"],["max","MAX","Licences"],["memos","Rappels","Mémos · tâches"],
   ["events","Objectifs","Événements"],["vols","Vols instr.","TrainerU"],["equipes","Équipes","Safety · TRI · lic."],
   ["dim","Effectif","180 / 180"],["moi","Mon temps","Gains · famille"],["regles","Règles","Manex D"]];
@@ -975,7 +985,7 @@ function vInit(){
   ${P.length>1?`<form class="form" data-form="pair"><span class="note">Contrôle d'équipage :</span><select id="pA">${P.map(p=>`<option>${esc(p.nom)}</option>`).join("")}</select><span>+</span><input type="text" id="pB" placeholder="Autre membre d'équipage" class="grow"><button class="b" type="submit">Vérifier</button></form>`:""}
   ${P.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Progression</th><th></th></tr></thead><tbody>${P.map(p=>{ const pc = Math.min(100,Math.round((p.heures||0)/r.initHeures*100));
     return `<tr><td><b>${pLink(p.nom, p.mat)}</b><div class="mono">${esc(p.pos||"")}${p.lacheLe?" · lâché "+frDate(p.lacheLe):""}</div></td>
-    <td><input type="number" min="0" value="${p.heures||0}" data-inith="${p.id}" aria-label="Heures"></td>
+    <td><input type="text" inputmode="decimal" value="${fmtHours(p.heures)}" placeholder="75:45" data-inith="${p.id}" aria-label="Heures" style="width:90px"></td>
     <td style="min-width:120px"><div class="gauge ${pc>=100?"ok":""}"><i style="width:${pc}%"></i></div><span class="note">${Math.max(0,r.initHeures-(p.heures||0))} h restantes</span></td>
     <td><button class="b sm" data-delinit="${p.id}">✕</button></td></tr>`;}).join("")}</tbody></table></div>`:`<div class="empty-state">Envoie-moi la liste des pilotes ab initio (heures depuis le lâcher). Les pilotes lâchés depuis l'onglet Lâcher arrivent ici tout seuls.</div>`}`;
 }
@@ -989,12 +999,12 @@ function selStatOld(o,f){ const v = o[f]||""; const opts = STATUTS;
 function vPL(){
   const r = R(), Pi = ev().filter(o=>!inEval(o)), PL = Pi.filter(o=>o.checkLocal==="Instruction PL"), CK = Pi.filter(o=>o.checkLocal!=="Instruction PL");
   const DOS = ["","À ramener","Remis à la formation","Désigné"];
-  return `<div class="note">Parcours : instruction PL (${r.plHeures} h ou ${r.plEtapes} étapes${r.manexConfirme?"":", à confirmer avec le Manex D"}) → dossier à la formation → désignation → Check Local et Check Nav → vols d'évaluation.</div>
+  return `<div class="note">Parcours : instruction PL (${r.plHeures} h ${r.plMode==="et"?"et":"ou"} ${r.plEtapes} séances${r.manexConfirme?"":", à confirmer avec le Manex D"}) → dossier à la formation → désignation → Check Local et Check Nav → vols d'évaluation.</div>
   <section class="list"><h2>Instruction PL (${PL.length})</h2>
-  ${PL.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Étapes</th><th>Dossier</th><th></th></tr></thead><tbody>${PL.map(o=>{ const fin = plDone(o);
+  ${PL.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Séances</th><th>Secteurs</th><th>Dossier</th><th></th></tr></thead><tbody>${PL.map(o=>{ const fin = plDone(o);
     return `<tr><td><b>${pLink(o.nom, o.matricule)}</b><div class="mono">${esc(o.matricule)}</div></td>
-    <td><input type="number" min="0" value="${o.plHeures||0}" data-plf="${o.matricule}" data-k="plHeures" aria-label="Heures"> <span class="note">/ ${r.plHeures}</span></td>
-    <td><input type="number" min="0" value="${o.plEtapes||0}" data-plf="${o.matricule}" data-k="plEtapes" aria-label="Étapes"> <span class="note">/ ${r.plEtapes}</span></td>
+    <td><input type="text" inputmode="decimal" value="${fmtHours(o.plHeures||0)}" data-plf="${o.matricule}" data-k="plHeures" aria-label="Heures" style="width:90px"> <span class="note">/ ${r.plHeures}</span></td>
+    <td><input type="number" min="0" value="${o.plEtapes??""}" placeholder="?" data-plf="${o.matricule}" data-k="plEtapes" aria-label="Séances"> <span class="note">/ ${r.plEtapes}</span></td><td class="num">${o.plSecteurs??"—"}</td>
     <td><select data-dos="${o.matricule}">${DOS.map(d=>`<option value="${d}" ${(o.dossier||"")===d?"selected":""}>${d||(fin?"À ramener !":"En cours")}</option>`).join("")}</select></td>
     <td>${fin?`<span class="pill ok">Terminé</span>`:""} ${o.dossier==="Désigné"?`<button class="b sm" data-tochecks="${o.matricule}">→ Checks</button>`:""}</td></tr>`;}).join("")}</tbody></table></div>`:`<div class="note">Aucun PL en instruction.</div>`}
   </section>
@@ -1003,7 +1013,7 @@ function vPL(){
   ${CK.map(o=>`<tr><td><b>${pLink(o.nom, o.matricule)}</b><div class="mono">${esc(o.matricule)}</div></td><td>${selStat(o,"checkLocal")}</td><td>${selStat(o,"checkNav")}</td>
     <td><button class="b sm" data-toeval="${o.matricule}" ${(o.checkLocal==="Validé"&&o.checkNav==="Validé")?"":"disabled"}>→ Évals</button></td></tr>`).join("")}
   </tbody></table></div></section>
-  <div class="note">Envoie-moi la liste exacte des PL en instruction et le Manex D : je mets à jour heures, étapes et règles.</div>`;
+  <div class="note">Envoie-moi la liste exacte des PL en instruction et le Manex D : je mets à jour heures, séances et règles.</div>`;
 }
 
 /* --- Évaluations --- */
@@ -1427,8 +1437,8 @@ function vRegles(){
   const r = R(); const fld = (k,l) => `<label>${l}<input type="number" min="0" value="${r[k]}" data-regle="${k}"></label>`;
   return `${backupBlock()}<div class="item ${r.manexConfirme?"ok":"warn"}"><div class="txt"><b>${r.manexConfirme?"Règles confirmées avec le Manex D":"Règles à confirmer avec le Manex D"}</b><div class="sub">Envoie-moi le Manex D : je vérifie chaque seuil, ainsi que les conditions pour être safety pilot.</div></div></div>
   <div class="card"><h3>Lâcher en ligne</h3><div class="row">${fld("legsLacher","Legs pour le lâcher")}${fld("legsAlerte","Alarme à (legs)")}${fld("legsSafety","Legs avec safety pilot")}</div></div>
-  <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div>
-    <label class="note">Fin d'instruction PL quand<select data-regletxt="plMode" style="margin-left:6px"><option value="ou" ${r.plMode!=="et"?"selected":""}>heures OU étapes atteintes</option><option value="et" ${r.plMode==="et"?"selected":""}>heures ET étapes atteintes</option></select></label></div>
+  <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : séances")}${fld("initHeures","Ab initio : heures")}</div>
+    <label class="note">Fin d'instruction PL quand<select data-regletxt="plMode" style="margin-left:6px"><option value="ou" ${r.plMode!=="et"?"selected":""}>heures OU séances atteintes</option><option value="et" ${r.plMode==="et"?"selected":""}>heures ET séances atteintes</option></select></label></div>
   <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}${fld("simuMois","Simu récurrent (mois)")}</div>
     <label class="note">Types de validités (séparés par des virgules)<input type="text" id="vtypes" value="${esc(r.validTypes.join(", "))}"></label><div class="row"><button class="b sm pri" data-vtypes="1">Enregistrer les types</button></div></div>`;
 }
@@ -1547,12 +1557,12 @@ V.addEventListener("change", e=>{
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
   if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
   if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
-  if (d.plf) upd("opl/"+d.plf, {[d.k]:+t.value||0});
+  if (d.plf) { if (d.k==="plHeures") { const hv = parseHours(t.value); if (hv==null) toast("Heures non comprises : écris par exemple 75:45"); else upd("opl/"+d.plf, {plHeures:hv}, "Heures PL : "+fmtHours(hv)); } else upd("opl/"+d.plf, {[d.k]:+t.value||0}); }
   if (d.dos!=null && d.dos!=="") upd("opl/"+d.dos, {dossier:t.value}, "Dossier mis à jour");
   if (d.memo) upd("memos/"+d.memo, {fait:t.checked});
   if (d.obj) { const e2 = st.events[d.obj]; upd("events/"+d.obj, {objectifs:(e2.objectifs||[]).map(o=>o.id===d.oid?{...o,fait:t.checked}:o)}); }
   if (d.cand!=null && d.cand!=="") { const C=(st.ref.equipes.candidatsTRI||[]).map(c=>({...c})); C[+d.cand].statut=t.value; upd("ref/equipes",{candidatsTRI:C},"Statut mis à jour"); }
-  if (d.inith) upd("init/"+d.inith, {heures:+t.value||0});
+  if (d.inith) { const hv = parseHours(t.value); if (hv==null) toast("Heures non comprises : écris par exemple 75:45"); else upd("init/"+d.inith, {heures:hv}, "Heures : "+fmtHours(hv)); }
   if (d.maxf) upd("max/"+d.maxf, {[d.k]:t.checked});
   if (d.maxet) upd("max/"+d.maxet, {etape:t.value});
   if (d.dim) put("ref/dim", {...(st.ref.dim||{cpt:0,fo:0,depCpt:0,depFo:0,upg:0,arrFo:0,arrCpt:0,cibleCpt:180,cibleFo:180}), [d.dim]:+t.value||0});
@@ -1628,7 +1638,11 @@ function makeLocalDb(){
 (async function boot(){
   let db = null;
   if (window.claude && window.claude.use) { try { db = await window.claude.use("db"); } catch(e) { db = null; } }
-  if (!db) { db = makeLocalDb(); st.local = true; }
+  if (!db) { db = makeLocalDb(); st.local = true;
+    // conversion unique : les « étapes » importées du suivi PL étaient des secteurs, la règle compte des séances
+    try { if (!localStorage.getItem("ftm.mig.secteurs")) { const all = db.exportAll(); let ch = 0;
+      Object.values(all.opl||{}).forEach(o=>{ if (o.plSource && o.plSecteurs==null && o.plEtapes!=null) { o.plSecteurs = o.plEtapes; o.plEtapes = null; ch++; } });
+      if (ch) db.importAll(all); localStorage.setItem("ftm.mig.secteurs","1"); } } catch(e) {} }
   st.db = db;
   COLS.forEach(name => db.collection(name).onSnapshot(s=>{ st[name]={}; s.docs.forEach(x=>st[name][x.id]=x.data()); st.loaded[name]=true; render(); }, ()=>{ st.loaded[name]=true; render(); }));
 })();
