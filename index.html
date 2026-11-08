@@ -297,7 +297,8 @@ async function add(col, data, ok){ if(!st.db) return toast("Base indisponible.")
 
 /* ---------- règles (modifiables, à confirmer avec le Manex D) ---------- */
 const DEF_REGLES = { legsLacher:40, legsAlerte:36, legsSafety:4, plHeures:100, plEtapes:25, initHeures:150, evalsStd:5, clMois:12,
-  validTypes:["CL","IC","IL","Check TRI","CRM","DGR","SMS","Sûreté","SSP1","SSP2"], manexConfirme:false };
+  validTypes:["CL","IC","IL","Check TRI","CRM","DGR","SMS","Sûreté","SSP1","SSP2"], manexConfirme:false, plMode:"ou" };
+const plDone = o => { const r = R(), h = (o.plHeures||0) >= r.plHeures, e = (o.plEtapes||0) >= r.plEtapes; return r.plMode==="et" ? (h && e) : (h || e); };
 const R = () => Object.assign({}, DEF_REGLES, st.ref.regles||{});
 const CAUSES = [["CGML","Maladie (CGML)"],["ABS","Absence pilote"],["IRGAV","Irrégularité avion"],["AMP","Amplitude"],["ABSTRI","Absence TRI"],["SOLL","Sollicitation"]];
 const causeLabel = c => (CAUSES.find(x=>x[0]===c)||[c,c])[1];
@@ -468,7 +469,7 @@ function alerts(){
   // checks PL / dossiers
   ev().filter(o=>!inEval(o)).forEach(o=>{
     ["checkLocal","checkNav"].forEach(f=>{ const m = /Prévu le (\d\d)\/(\d\d)/.exec(o[f]||""); if (m && "2026-"+m[2]+"-"+m[1] < T0) A.push({k:"warn", v:"pl", t:`${o.nom} : ${f==="checkLocal"?"check local":"check nav"} ${o[f].toLowerCase()}`, s:"Résultat à mettre à jour"}); });
-    if (o.checkLocal==="Instruction PL" && ((o.plHeures||0) >= r.plHeures || (o.plEtapes||0) >= r.plEtapes) && !o.dossier) A.push({k:"warn", v:"pl", t:`${o.nom} : instruction PL terminée`, s:"Dossier à ramener à la formation pour désignation"});
+    if (o.checkLocal==="Instruction PL" && plDone(o) && !o.dossier) A.push({k:"warn", v:"pl", t:`${o.nom} : instruction PL terminée`, s:"Dossier à ramener à la formation pour désignation"});
   });
   // lâcher
   lacherList().forEach(p=>{
@@ -958,7 +959,7 @@ function vPL(){
   const DOS = ["","À ramener","Remis à la formation","Désigné"];
   return `<div class="note">Parcours : instruction PL (${r.plHeures} h ou ${r.plEtapes} étapes${r.manexConfirme?"":", à confirmer avec le Manex D"}) → dossier à la formation → désignation → Check Local et Check Nav → vols d'évaluation.</div>
   <section class="list"><h2>Instruction PL (${PL.length})</h2>
-  ${PL.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Étapes</th><th>Dossier</th><th></th></tr></thead><tbody>${PL.map(o=>{ const fin = (o.plHeures||0)>=r.plHeures || (o.plEtapes||0)>=r.plEtapes;
+  ${PL.length?`<div class="tbl"><table><thead><tr><th>Pilote</th><th>Heures</th><th>Étapes</th><th>Dossier</th><th></th></tr></thead><tbody>${PL.map(o=>{ const fin = plDone(o);
     return `<tr><td><b>${esc(o.nom)}</b><div class="mono">${esc(o.matricule)}</div></td>
     <td><input type="number" min="0" value="${o.plHeures||0}" data-plf="${o.matricule}" data-k="plHeures" aria-label="Heures"> <span class="note">/ ${r.plHeures}</span></td>
     <td><input type="number" min="0" value="${o.plEtapes||0}" data-plf="${o.matricule}" data-k="plEtapes" aria-label="Étapes"> <span class="note">/ ${r.plEtapes}</span></td>
@@ -1023,6 +1024,164 @@ function vEvals(){
   </section>`;
 }
 
+/* ---------- calculateur de changements simu ----------
+   Contraintes dures : un créneau = une seule séance ; une personne (TRI ou stagiaire) jamais deux fois
+   sur le même créneau ; un stagiaire une seule séance par jour ; un TRI au plus 2 séances par jour ;
+   repos : pas de S5 (23:00-03:00) suivi de S1 (06:00) le lendemain ; ordre des séances d'une PEQ respecté.
+   Le score (0-100) classe les options faisables : charge du TRI, séances du jour, écart de date. */
+const NOTCREW = ["SKT","ZFTT","FFS","FBS","FFBS","FFFS","CLVO","RNAV","CDB","FO","CPT","PEQ","R","UPRT"];
+function crewKeys(crew){
+  const t = norm(crew); const m = t.match(/PEQ\s*(\d+)/);
+  if (m) return ["PEQ "+m[1]];
+  return String(crew||"").split(/\+/).map(x=>x.replace(/^\s*(CDB|FO|CPT|Cdb)\s*[:;]?\s*/i,"").trim()).filter(Boolean).map(surname)
+    .filter(x=>x && x.length>2 && !NOTCREW.includes(x) && !/^\d/.test(x));
+}
+const peopleOf = x => ({tri: instrNames(x.instr), crew: crewKeys(x.crew)});
+const slotKey = x => x.mois+"|"+x.ji+"|"+x.si;
+const posCmp = (a,b) => a.date.localeCompare(b.date) || a.s-b.s;
+function sessionsOn(date, exclude){ return allSlots().filter(x=>x.date===date && !(exclude||[]).includes(slotKey(x))); }
+
+/* problèmes pour une personne placée à (date, s) */
+function personIssues(name, role, date, s, exclude){
+  const iss = [];
+  const same = sessionsOn(date, exclude).filter(x=>{ const P = peopleOf(x); return (role==="tri"?P.tri:P.crew).includes(name) || (role==="tri"?P.crew:P.tri).includes(name); });
+  if (same.some(x=>x.s===s)) iss.push("déjà sur ce créneau");
+  if (role==="crew" && same.length) iss.push("déjà une séance ce jour");
+  if (role==="tri" && same.length>=2) iss.push("déjà 2 séances ce jour");
+  if (s===1) { const prev = sessionsOn(addDays(date,-1), exclude).find(x=>x.s===5 && [...peopleOf(x).tri, ...peopleOf(x).crew].includes(name)); if (prev) iss.push("repos : S5 la veille"); }
+  if (s===5) { const next = sessionsOn(addDays(date,1), exclude).find(x=>x.s===1 && [...peopleOf(x).tri, ...peopleOf(x).crew].includes(name)); if (next) iss.push("repos : S1 le lendemain"); }
+  return iss;
+}
+/* ordre des séances d'une PEQ */
+function peqOrderOk(sess, date, s){
+  const P = peopleOf(sess).crew.filter(k=>k.startsWith("PEQ "));
+  if (!P.length) return true;
+  const others = allSlots().filter(x=>slotKey(x)!==slotKey(sess) && peopleOf(x).crew.includes(P[0])).sort(posCmp);
+  const prev = others.filter(x=>posCmp(x, sess)<0).pop(), next = others.find(x=>posCmp(x, sess)>0);
+  const np = {date, s};
+  return (!prev || posCmp(prev, np)<0) && (!next || posCmp(np, next)<0);
+}
+function triScore(k, date, mois, opts){
+  const L = monthLoad(mois), extra = (opts&&opts.extra&&opts.extra[k])||0;
+  const load = (L[k]||0) + extra, sameDay = sessionsOn(date, opts&&opts.exclude).filter(x=>instrNames(x.instr).includes(k)).length;
+  let sc = 100 - Math.min(45, load*5); const why = [];
+  const near = allSlots().filter(x=>Math.abs(daysTo(x.date)-daysTo(date))===1 && instrNames(x.instr).includes(k)).length;
+  if (near) { sc -= 5*near; why.push(`${near} séance${near>1?"s":""} la veille ou le lendemain`); }
+  why.push(`${load} séance${load>1?"s":""} ce mois`);
+  if (sameDay) { sc -= 15; why.push("déjà 1 séance ce jour"); } else why.push("libre ce jour");
+  const secteur = new Set([...(((st.ref.tri&&st.ref.tri.secteur)||[]).map(surname)), ...TRI().map(surname)]);
+  if (!secteur.has(k)) { sc -= 20; why.push("hors liste TRI du secteur"); }
+  return {sc: Math.max(5, sc), why};
+}
+/* options pour remplacer / trouver un TRI */
+function optReplace(sess, extra){
+  const cur = instrNames(sess.instr), pool = triPool(), out = [];
+  for (const [k, n] of pool) {
+    if (cur.includes(k)) continue;
+    const iss = personIssues(k, "tri", sess.date, sess.s, [slotKey(sess)]);
+    if (iss.length) continue;
+    const {sc, why} = triScore(k, sess.date, sess.mois, {exclude:[slotKey(sess)], extra});
+    out.push({k, n, sc, why});
+  }
+  return out.sort((a,b)=>b.sc-a.sc);
+}
+/* options pour déplacer une séance (± 7 jours, créneaux libres) */
+function optMove(sess, keepTri){
+  const P = peopleOf(sess), out = [], seen = new Set(allSlots().map(x=>x.date+"|"+x.s));
+  const days = Object.values(st.simu).flatMap(m=>(m.jours||[]).map((j,ji)=>({mois:m.mois, ji, date:j.date})));
+  days.filter(d=>d.date>=T0 && Math.abs(daysTo(d.date)-daysTo(sess.date))<=7).forEach(d=>{
+    for (let s=1; s<=5; s++){
+      if (d.date===sess.date && s===sess.s) continue;
+      if (seen.has(d.date+"|"+s)) continue;
+      const ex = [slotKey(sess)];
+      if (P.crew.some(c=>personIssues(c, "crew", d.date, s, ex).length)) continue;
+      if (!peqOrderOk(sess, d.date, s)) continue;
+      let tri = P.tri, triNote = "même TRI", sc = 100;
+      const triBad = P.tri.some(t=>personIssues(t, "tri", d.date, s, ex).length);
+      if (triBad || !P.tri.length) {
+        if (keepTri && P.tri.length) continue;
+        const best = optReplace({...sess, date:d.date, s, mois:d.mois})[0];
+        if (!best) continue;
+        tri = [best.k]; triNote = `TRI proposé : ${best.n}`; sc -= 12; sc = Math.min(sc, best.sc);
+      } else if (P.tri[0]) { sc = Math.min(sc, triScore(P.tri[0], d.date, d.mois, {exclude:ex}).sc + 5); }
+      sc -= Math.abs(daysTo(d.date)-daysTo(sess.date))*3;
+      out.push({mois:d.mois, ji:d.ji, date:d.date, s, sc:Math.max(5, Math.min(100, sc)), triNote, newTri: triBad||!P.tri.length ? (triPool().get(tri[0])||tri[0]) : null});
+    }
+  });
+  return out.sort((a,b)=>b.sc-a.sc).slice(0,12);
+}
+/* TRI indisponible : remplaçant pour chacune de ses séances */
+function optIndispo(triName, from, to){
+  const k = surname(triName); if (!k) return [];
+  const S = allSlots().filter(x=>x.date>=from && x.date<=to && instrNames(x.instr).includes(k));
+  const plan = [], extra = {};
+  S.forEach(x=>{
+    const others = instrNames(x.instr).filter(n=>n!==k);
+    const busy = o => plan.some(p=>p.k===o.k && (p.date===x.date || (Math.abs(daysTo(p.date)-daysTo(x.date))===1 && ((p.s===5 && x.s===1) || (p.s===1 && x.s===5)))));
+    const best = optReplace(x, extra).filter(o=>!busy(o))[0];
+    if (best) extra[best.k] = (extra[best.k]||0) + 1;
+    plan.push({sess:x, k:best&&best.k, n:best&&best.n, sc:best?best.sc:0, why:best?best.why:["aucun TRI libre"], date:x.date, s:x.s, multi:others.length>0});
+  });
+  return plan;
+}
+const scLbl = sc => sc>=80 ? ["ok","Très favorable"] : sc>=60 ? ["info","Possible"] : ["warn","Difficile"];
+function scBar(sc){ const [k,l] = scLbl(sc); return `<div class="row" style="gap:6px;flex-wrap:nowrap"><div class="gauge ${k==="ok"?"ok":k==="warn"?"warn":""}" style="width:90px;flex:0 0 90px"><i style="width:${sc}%"></i></div><b class="${k==="ok"?"c-grn":k==="warn"?"c-amb":"c-cyn"}">${sc}%</b><span class="note">${l}</span></div>`; }
+const sessLabel = x => `${dayLabel(x.date)} · S${x.s} · ${x.crew||"—"} · ${isEmptySlot(x)?"TRI à trouver":(x.instr||"—")}`;
+
+function vCalc(){
+  const mode = F("asMode","rempl"), up = allSlots().filter(x=>x.date>=T0);
+  const sk = F("asSess", up.find(isEmptySlot) ? slotKey(up.find(isEmptySlot)) : (up[0]?slotKey(up[0]):""));
+  const sess = up.find(x=>slotKey(x)===sk) || up[0];
+  let body = "";
+  if (mode==="rempl" || mode==="depl") {
+    const sel = `<label class="fld wide"><span>Séance</span><select id="asSess">${up.map(x=>`<option value="${slotKey(x)}" ${sess&&slotKey(x)===slotKey(sess)?"selected":""}>${esc(sessLabel(x))}</option>`).join("")}</select></label>`;
+    if (!sess) body = `<div class="note">Aucune séance à venir.</div>`;
+    else if (mode==="rempl") {
+      const multi = instrNames(sess.instr).length>1;
+      const O = optReplace(sess).slice(0,8);
+      body = sel + (multi?`<div class="note">Séance à deux instructeurs (${esc(sess.instr)}) : le TRI choisi remplacera les deux. Modifie à la main si besoin.</div>`:"") +
+        (O.length ? `<div class="list">${O.map(o=>`<div class="item ${scLbl(o.sc)[0]}"><div class="txt"><b>${esc(o.n)}</b><div class="sub">${o.why.map(esc).join(" · ")}</div>${scBar(o.sc)}</div><button class="b sm pri" data-calcset="${slotKey(sess)}" data-val="${esc(o.n)}">Appliquer</button></div>`).join("")}</div>`
+          : `<div class="item warn"><div class="txt">Aucun TRI libre sans conflit ce jour-là. Essaie « Déplacer la séance ».</div></div>`);
+    } else {
+      const keep = F("asKeep","1")==="1", O = optMove(sess, keep);
+      body = sel + `<div class="seg"><button data-fset="asKeep" data-val="1" aria-pressed="${keep}">Garder le même TRI</button><button data-fset="asKeep" data-val="0" aria-pressed="${!keep}">TRI libre accepté</button></div>` +
+        (O.length ? `<div class="list">${O.map(o=>`<div class="item ${scLbl(o.sc)[0]}"><div class="txt"><b>${dayLabel(o.date)} · S${o.s} ${SLOTS[o.s-1]}</b><div class="sub">${esc(o.triNote)} · créneau libre · repos OK${peopleOf(sess).crew.some(c=>c.startsWith("PEQ"))?" · ordre de la PEQ respecté":""}</div>${scBar(o.sc)}</div><button class="b sm pri" data-calcmove="${slotKey(sess)}" data-to="${o.mois}|${o.ji}|${o.s}" data-tri="${esc(o.newTri||"")}">Déplacer ici</button></div>`).join("")}</div>`
+          : `<div class="item warn"><div class="txt">Aucun créneau libre sans conflit à ± 7 jours${keep?" avec le même TRI. Essaie « TRI libre accepté »":""}.</div></div>`);
+    }
+  } else {
+    const tri = F("asTri",""), from = F("asFrom",T0), to = F("asTo",addDays(T0,7));
+    const plan = tri ? optIndispo(tri, from, to) : [];
+    const okN = plan.filter(p=>p.k).length;
+    body = `<div class="form"><input type="text" id="asTri" list="triList" placeholder="TRI indisponible" value="${esc(tri)}" class="grow"><label>Du<input type="date" id="asFrom" value="${from}"></label><label>Au<input type="date" id="asTo" value="${to}"></label></div>` +
+      (!tri ? `<div class="note">Indique le TRI et la période : je trouve un remplaçant pour chacune de ses séances, sans chevauchement.</div>` :
+       plan.length ? `<div class="list">${plan.map((p,i)=>`<div class="item ${p.k?scLbl(p.sc)[0]:"crit"}"><div class="txt"><b>${esc(sessLabel(p.sess))}</b><div class="sub">${p.k?"Remplaçant : "+esc(p.n)+" · "+p.why.map(esc).join(" · "):"Aucun remplaçant libre : à traiter à la main"}${p.multi?" · séance à deux instructeurs":""}</div>${p.k?scBar(p.sc):""}</div></div>`).join("")}</div>
+         ${okN?`<button class="b pri" data-calcall="1">Appliquer les ${okN} remplacement${okN>1?"s":""}</button>`:""}` : `<div class="note">Aucune séance de ce TRI sur la période.</div>`);
+  }
+  return `<section class="du"><div class="du-t">Calculateur de changements <span>sans chevauchement</span></div>
+    <div class="seg">${[["rempl","Remplacer un TRI"],["depl","Déplacer une séance"],["indispo","TRI indisponible"]].map(([k,l])=>`<button data-fset="asMode" data-val="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
+    ${body}
+    <div class="note">Vérifié pour chaque option : créneau libre, personne en double, au plus 2 séances par TRI et 1 par stagiaire et par jour, repos entre S5 et S1, ordre des séances de la PEQ. Le pourcentage classe les options (charge du TRI, écart de date). Chaque changement s'ajoute au mail du CSV Kouba.</div>
+  </section>`;
+}
+async function applyMove(fromKey, toKey, newTri){
+  const [m,ji,si] = fromKey.split("|"), [m2,ji2,s2] = toKey.split("|");
+  const A = JSON.parse(JSON.stringify(st.simu[m].jours)), B = m2===m ? A : JSON.parse(JSON.stringify(st.simu[m2].jours));
+  const x = A[+ji].slots.splice(+si,1)[0], old = {date:A[+ji].date, s:x.s};
+  x.s = +s2; x.h = SLOTS[+s2-1]; if (newTri) x.instr = newTri;
+  B[+ji2].slots.push(x); B[+ji2].slots.sort((a,b)=>a.s-b.s);
+  await upd("simu/"+m, {jours:A}); if (m2!==m) await upd("simu/"+m2, {jours:B});
+  await add("simulog", {date:T0, texte:`Déplacement : ${x.crew||"séance"} du ${dayLabel(old.date)} S${old.s} au ${dayLabel(B[+ji2].date)} S${s2}${newTri?" avec "+newTri:""}`, notifie:false, cree:Date.now()}, "Séance déplacée");
+}
+async function applyIndispo(){
+  const plan = optIndispo(F("asTri",""), F("asFrom",T0), F("asTo",addDays(T0,7))).filter(p=>p.k);
+  const docs = {}; const logs = [];
+  plan.forEach(p=>{ const x = p.sess; docs[x.mois] = docs[x.mois] || JSON.parse(JSON.stringify(st.simu[x.mois].jours));
+    const sl = docs[x.mois][x.ji].slots[x.si]; logs.push(`${dayLabel(x.date)} S${x.s} : TRI ${sl.instr||"(vide)"} → ${p.n} (indisponibilité ${F("asTri","")})`); sl.instr = p.n; });
+  for (const [m, J] of Object.entries(docs)) await upd("simu/"+m, {jours:J});
+  for (const t of logs) await add("simulog", {date:T0, texte:t, notifie:false, cree:Date.now()});
+  toast(`${logs.length} remplacement${logs.length>1?"s":""} appliqué${logs.length>1?"s":""}`);
+}
+
 /* --- Simulateur --- */
 function vSimu(){
   const months = Object.keys(st.simu).sort();
@@ -1042,7 +1201,9 @@ function vSimu(){
     <div class="seg">${months.map(m=>`<button data-fset="simM" data-val="${m}" aria-pressed="${m===M}">${MN(m)}</button>`).join("")}</div>
     <div class="seg"><button data-fset="simF" data-val="next" aria-pressed="${filt==="next"}">À venir</button><button data-fset="simF" data-val="all" aria-pressed="${filt==="all"}">Tout le mois</button><button data-fset="simF" data-val="empty" aria-pressed="${filt==="empty"}">Sans TRI (${nEmpty})</button><button data-fset="simF" data-val="mine" aria-pressed="${filt==="mine"}">Mes séances</button></div>
   </div>
-  <div class="note">S1 06:00 · S2 10:15 · S3 14:30 · S4 18:45 · S5 23:00. Touche une séance pour modifier le TRI ou l'équipage, ou pour voir les permutations possibles.</div>
+  <div class="row"><button class="b ${ui.f.calcOpen?"":"pri"}" data-calctoggle="1">${ui.f.calcOpen?"Fermer le calculateur":"Calculateur de changements et permutations"}</button></div>
+  ${ui.f.calcOpen ? vCalc() : ""}
+  <div class="note">S1 06:00 · S2 10:15 · S3 14:30 · S4 18:45 · S5 23:00. Touche une séance (✎) pour modifier le TRI, l'équipage ou l'horaire, la supprimer, ou calculer les options.</div>
   <datalist id="triList">${[...triPool().values()].map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
   ${days.map(j=>{ const S = slots.filter(s=>s.date===j.date); if (filt==="next" && j.date<T0) return ""; if (!S.length && filt!=="all" && filt!=="next") return ""; const addK = "add"+M+j.ji;
     return `<section class="day"><div class="dayh ${j.date===T0?"today":""}">${dayLabel(j.date)} ${j.date===T0?`<span class="pill info">Aujourd'hui</span>`:""}<span style="flex:1"></span>${filt==="all"||filt==="next"?`<button class="b sm" data-openform="${addK}">+ Séance</button>`:""}</div>
@@ -1052,11 +1213,12 @@ function vSimu(){
         return `<div class="slot ${isEmptySlot(s)?"empty":"mine"}"><div class="t"><b>S${s.s}</b>${s.h}</div><div class="w">
         <form class="grid2" data-form="slot" data-key="${key}" style="gap:6px"><input type="text" id="sl-i" list="triList" value="${esc(s.instr)}" placeholder="TRI"><input type="text" id="sl-c" value="${esc(s.crew)}" placeholder="Équipage / séance">
           <div class="row"><button class="b sm pri" type="submit">Enregistrer</button><button class="b sm" type="button" data-closeform="slot">Fermer</button><button class="b sm crb" type="button" data-delslot="${key}">Supprimer</button></div></form>
-        <div class="note">TRI libres ce jour (les moins chargés du mois d'abord) :</div>
-        <div class="chips">${pm.libres.map(x=>`<button class="chip free" data-settri="${key}" data-val="${esc(x.n)}">${esc(x.n)} · ${x.load}</button>`).join("") || `<span class="note">Aucun TRI libre connu. Envoie-moi la liste des TRI du secteur.</span>`}</div>
+        <div class="note">Meilleurs TRI libres pour ce créneau (sans conflit) :</div>
+        <div class="chips">${optReplace(s).slice(0,5).map(x=>`<button class="chip free" data-settri="${key}" data-val="${esc(x.n)}">${esc(x.n)} · ${x.sc}%</button>`).join("") || `<span class="note">Aucun TRI libre sans conflit ce jour-là.</span>`}</div>
+        <div class="row"><button class="b sm pri" data-calcopen="${key}" data-mode="rempl">Toutes les options TRI</button><button class="b sm" data-calcopen="${key}" data-mode="depl">Déplacer cette séance</button></div>
         ${pm.echanges.length?`<div class="note">Échanges possibles (± 3 jours, chacun libre le jour de l'autre) :</div><div class="chips">${pm.echanges.map(o=>`<button class="chip pend" data-swap="${key}" data-with="${o.mois}|${o.ji}|${o.si}">${esc(instrNames(o.instr)[0])} · ${dayLabel(o.date)} S${o.s}</button>`).join("")}</div>`:""}
         </div></div>`; }
-      return `<div class="slot ${isEmptySlot(s)?"empty":(isMine(s)?"mine":"")}"><div class="t"><b>S${s.s}</b>${s.h}</div><button class="w link" data-slot="${key}"><span style="font-weight:700;${isEmptySlot(s)?"color:var(--crit)":""}">${isEmptySlot(s)?"TRI à trouver":esc(s.instr||"—")}</span><span class="sub">${esc(s.crew||"—")}</span></button></div>`;}).join("")}
+      return `<div class="slot ${isEmptySlot(s)?"empty":(isMine(s)?"mine":"")}"><div class="t"><b>S${s.s}</b>${s.h}</div><button class="w link" data-slot="${key}"><span style="font-weight:700;${isEmptySlot(s)?"color:var(--crit)":""}">${isEmptySlot(s)?"TRI à trouver":esc(s.instr||"—")}</span><span class="sub">${esc(s.crew||"—")} <span class="c-cyn">✎</span></span></button></div>`;}).join("")}
     </section>`;}).join("")}`;
 }
 
@@ -1188,7 +1350,8 @@ function vRegles(){
   const r = R(); const fld = (k,l) => `<label>${l}<input type="number" min="0" value="${r[k]}" data-regle="${k}"></label>`;
   return `${backupBlock()}<div class="item ${r.manexConfirme?"ok":"warn"}"><div class="txt"><b>${r.manexConfirme?"Règles confirmées avec le Manex D":"Règles à confirmer avec le Manex D"}</b><div class="sub">Envoie-moi le Manex D : je vérifie chaque seuil, ainsi que les conditions pour être safety pilot.</div></div></div>
   <div class="card"><h3>Lâcher en ligne</h3><div class="row">${fld("legsLacher","Legs pour le lâcher")}${fld("legsAlerte","Alarme à (legs)")}${fld("legsSafety","Legs avec safety pilot")}</div></div>
-  <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div></div>
+  <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div>
+    <label class="note">Fin d'instruction PL quand<select data-regletxt="plMode" style="margin-left:6px"><option value="ou" ${r.plMode!=="et"?"selected":""}>heures OU étapes atteintes</option><option value="et" ${r.plMode==="et"?"selected":""}>heures ET étapes atteintes</option></select></label></div>
   <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}</div>
     <label class="note">Types de validités (séparés par des virgules)<input type="text" id="vtypes" value="${esc(r.validTypes.join(", "))}"></label><div class="row"><button class="b sm pri" data-vtypes="1">Enregistrer les types</button></div></div>`;
 }
@@ -1227,6 +1390,12 @@ V.addEventListener("click", async e=>{
   const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.pilot) return openPilot(d.pilot);
+  if (d.calctoggle) { ui.f.calcOpen = !ui.f.calcOpen; return render(); }
+  if (d.calcopen) { ui.f.calcOpen = true; ui.f.asSess = d.calcopen; ui.f.asMode = d.mode; delete ui.form.slot; render(); window.scrollTo(0,0); return; }
+  if (d.calcset) { const [m,ji,si] = d.calcset.split("|"); const j = st.simu[m].jours[+ji], x = j.slots[+si];
+    return setSlot(m,+ji,+si,{instr:d.val}, `${dayLabel(j.date)} S${x.s} : TRI ${x.instr||"(vide)"} → ${d.val}`); }
+  if (d.calcmove) return applyMove(d.calcmove, d.to, d.tri||"");
+  if (d.calcall) return applyIndispo();
   if (d.export && st.db.exportAll) { const blob = new Blob([JSON.stringify(st.db.exportAll(), null, 1)], {type:"application/json"}); const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "ftm-desk-sauvegarde-"+T0+".json"; document.body.appendChild(a); a.click(); a.remove(); return toast("Sauvegarde exportée"); }
   if (d.colres!=null && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), resultat:d.colres}}, d.colres?"Résultat du collège : "+d.colres:"Résultat effacé"); }
@@ -1293,6 +1462,8 @@ V.addEventListener("change", e=>{
   if (t.id && t.id.startsWith("tri-")) ui.form[t.id.slice(4)].tri = t.value;
   if (t.id && t.id.startsWith("date-")) ui.form[t.id.slice(5)].date = t.value;
   if (t.id==="impFile" && t.files && t.files[0]) { const fr = new FileReader(); fr.onload = () => { try { const obj = JSON.parse(fr.result); if (!obj || typeof obj!=="object") throw 0; st.db.importAll(obj); toast("Données importées"); } catch(e) { toast("Fichier illisible : choisis le fichier ftm-desk-sauvegarde."); } }; fr.readAsText(t.files[0]); return; }
+  if (["asSess","asTri","asFrom","asTo"].includes(t.id)) { ui.f[t.id] = t.value; return render(); }
+  if (d.regletxt) { put("ref/regles", {...(st.ref.regles||{}), [d.regletxt]:t.value}, "Règle enregistrée"); return; }
   if (d.ff) { const p = pilotById(ui.pid); if (p) saveField(p, d.ff, t.value); return; }
   if (d.col && d.m) { const o = st.opl[d.m]; return upd("opl/"+d.m, {college:{...(o.college||{date:COLLEGE_DATE}), [d.col]:t.value}}, "Enregistré"); }
   if (d.stat) upd("opl/"+d.stat, {[d.f]:t.value, [d.f+"Date"]: t.value==="Validé"?T0:""}, "Statut mis à jour");
