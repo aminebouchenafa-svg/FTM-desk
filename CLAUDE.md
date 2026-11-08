@@ -21,6 +21,7 @@ Mettre à jour avec l'outil ArtifactData (toujours lire le doc avant, passer `if
 - `ref/pilotes` : annuaire {rows[{id, nom, mat, fonction CPT|FO, sources}]} ; la fiche pilote relie les modules par matricule, sinon par NOM + 3 lettres du prénom.
 - `fiches/<id pilote>` : saisies manuelles de la fiche {dernierSimu, prochainSimu, licence, note, fonction (prioritaire sur l'annuaire), sorti{motif, date}} ; `sorti` = hors secteur (caché des listes, filtre « Sortis »).
 - Dans `opl`, `college` {date, resultat Admis|Ajourné, qtDate} après les 5 évals : parcours PL → check local → check nav → évals → collège CDB → QT ATR.
+- `ref/simuhist` : historique simu par pilote {rows[{id (pilote), nom, last, next, n, lastSrc}]} tiré de toutes les feuilles du classeur simu ; échéance = last + `simuMois` (6). Outils : tools/simu_history_numbers.py puis tools/simu_history_match.py (lit w/pilotes.json et ev.json).
 - `ref/regles` (seuils modifiables), `ref/dim` (dimensionnement), `perso/moi` (mon temps).
 - Dans `opl`, `groupe` = OPL | CDB | CIBLE ; `total` évals ; programmes statut programmé | fait | raté (+ cause CGML, ABS, IRGAV, AMP, ABSTRI, SOLL).
 - Cahier des charges complet : `CAHIER_DES_CHARGES.md`.

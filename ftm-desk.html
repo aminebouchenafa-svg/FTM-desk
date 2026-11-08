@@ -278,7 +278,7 @@ async function del(path, ok){ if(!st.db) return; try{ await st.db.doc(path).dele
 async function add(col, data, ok){ if(!st.db) return toast("Base indisponible."); try{ await st.db.collection(col).add(data); if(ok) toast(ok);}catch(e){ fail(e);} }
 
 /* ---------- règles (modifiables, à confirmer avec le Manex D) ---------- */
-const DEF_REGLES = { legsLacher:40, legsAlerte:36, legsSafety:4, plHeures:100, plEtapes:25, initHeures:150, evalsStd:5, clMois:12,
+const DEF_REGLES = { legsLacher:40, legsAlerte:36, legsSafety:4, plHeures:100, plEtapes:25, initHeures:150, evalsStd:5, clMois:12, simuMois:6,
   validTypes:["CL","IC","IL","Check TRI","CRM","DGR","SMS","Sûreté","SSP1","SSP2"], manexConfirme:false, plMode:"ou" };
 const plDone = o => { const r = R(), h = (o.plHeures||0) >= r.plHeures, e = (o.plEtapes||0) >= r.plEtapes; return r.plMode==="et" ? (h && e) : (h || e); };
 const R = () => Object.assign({}, DEF_REGLES, st.ref.regles||{});
@@ -313,7 +313,10 @@ function evLevel(o){
 
 /* ---------- simulateur ---------- */
 const SLOTS = ["06:00","10:15","14:30","18:45","23:00"];
-function allSlots(){
+let _memo = {};
+const memo = (k, fn) => (k in _memo) ? _memo[k] : (_memo[k] = fn());
+function allSlots(){ return memo("slots", allSlotsRaw); }
+function allSlotsRaw(){
   const out = [];
   Object.values(st.simu).forEach(m => (m.jours||[]).forEach((j,ji) => (j.slots||[]).forEach((s,si) => out.push({mois:m.mois, ji, si, date:j.date, ...s}))));
   return out.sort((a,b)=> a.date.localeCompare(b.date) || a.s-b.s);
@@ -396,6 +399,26 @@ function lcStatus(r){
   return {k:"ok", t:"Valide", exp:r.expiry};
 }
 
+/* ---------- simulateur récurrent (tous les 6 mois) ---------- */
+const histRows = () => (st.ref.simuhist && st.ref.simuhist.rows) || [];
+function simuInfo(p){ return memo("si:"+p.id, ()=>simuInfoRaw(p)); }
+function simuInfoRaw(p){
+  const h = histRows().find(x=>x.id===p.id) || histRows().find(x=>sameP(p, x.nom, ""));
+  const sim = simuFor(p), fx = st.fiches[p.id] || {};
+  const lastAuto = [h&&h.last, sim.last&&sim.last.date].filter(Boolean).sort().pop() || "";
+  const nextAuto = [h&&h.next, sim.next&&sim.next.date].filter(d=>d && d>=T0).sort()[0] || "";
+  const last = fx.dernierSimu || lastAuto, next = fx.prochainSimu || nextAuto;
+  const exp = fx.simuExp || (last ? addMonths(last, R().simuMois) : "");
+  return {h, sim, last, next, exp, lastAuto, nextAuto};
+}
+function simuStatus(x){
+  if (!x.last && !x.exp) return {k:"mute", t:"Pas d'historique"};
+  const n = daysTo(x.exp), cov = x.next && x.next <= x.exp;
+  if (n < 0) return x.next ? {k:"warn", t:"Expiré, prochain le "+frDate(x.next)} : {k:"crit", t:"Expiré, non programmé"};
+  if (n <= 30) return cov ? {k:"info", t:"Programmé le "+frDate(x.next)} : {k:"warn", t:`Expire dans ${n} j, non programmé`};
+  return {k:"ok", t:"À jour"};
+}
+
 /* ---------- licences ---------- */
 const lics = () => (st.ref.licences && st.ref.licences.rows) || [];
 function licStatus(r){
@@ -408,12 +431,14 @@ function licStatus(r){
 /* ---------- vols TrainerU ---------- */
 const VCODE = {i:"Instr. ligne", n:"Instr. PL", p:"Pré-contrôle", c:"Lâché", e:"Contrôle ligne", v:"Éval"};
 const VGROUP = {i:"instr", n:"instr", p:"ctrl", c:"ctrl", e:"ctrl", v:"eval"};
-function volsRows(){
+function volsRows(){ return memo("volsRows", volsRowsRaw); }
+function volsRowsRaw(){
   const seen = new Set(), out = [];
   Object.values(st.vols).forEach(rep=>(rep.rows||[]).forEach(r=>{ const k = r.date+"|"+r.heure+"|"+(r.stagiaire.id||r.stagiaire.nom); if (!seen.has(k)) { seen.add(k); out.push(r); } }));
   return out.sort((a,b)=>b.date.localeCompare(a.date) || String(b.heure).localeCompare(String(a.heure)));
 }
-function trainees(){
+function trainees(){ return memo("trainees", traineesRaw); }
+function traineesRaw(){
   const T = {};
   volsRows().forEach(r=>{ const k = norm(r.stagiaire.nom);
     const t = T[k] = T[k] || {key:k, nom:r.stagiaire.nom, pos:r.stagiaire.pos, id:r.stagiaire.id, vols:[], n:{}, last:"", lache:""};
@@ -422,7 +447,8 @@ function trainees(){
 }
 
 /* ---------- alarmes (tous modules) ---------- */
-function alerts(){
+function alerts(){ return memo("alerts", alertsRaw); }
+function alertsRaw(){
   const A = [], r = R();
   // évaluations
   ev().forEach(o=>{
@@ -467,6 +493,10 @@ function alerts(){
   allSlots().filter(s=>s.date>=T0 && s.date<=addDays(T0,14) && isEmptySlot(s)).forEach(s=>A.push({k: daysTo(s.date)<=3?"crit":"warn", v:"simu", t:`Simu ${dayLabel(s.date)} S${s.s} : TRI à trouver`, s:s.crew}));
   const nlog = Object.values(st.simulog).filter(l=>!l.notifie).length;
   if (nlog) A.push({k:"warn", v:"simu", t:`${nlog} changement${nlog>1?"s":""} simu à notifier au CSV Kouba`, s:"Message prêt à copier dans l'onglet Simu"});
+  // simulateur récurrent
+  if (histRows().length) activeReg().forEach(p=>{ const x = simuInfo(p); if (!x.last) return; const s2 = simuStatus(x);
+    if (s2.k==="crit") A.push({k:"crit", v:"valid", t:`${p.nom} : simu récurrent expiré le ${frDate(x.exp)}`, s:"Dernier simu le "+frDate(x.last)+" · non programmé"});
+    else if (s2.k==="warn") A.push({k:"warn", v:"valid", t:`${p.nom} : simu récurrent`, s:s2.t+" · expire le "+frDate(x.exp)}); });
   // contrôles en ligne (état DO)
   lcRows().forEach(x=>{ const s2 = lcStatus(x); if (s2.k==="crit") A.push({k:"crit", v:"valid", t:`${x.nom} : contrôle en ligne expiré le ${frDate(x.expiry)}`, s:"Non programmé"});
     else if (s2.k==="warn" && !(x.plannedTxt||"").toLowerCase().startsWith("a suivre")) A.push({k:"warn", v:"valid", t:`${x.nom} : contrôle en ligne`, s:s2.t+(x.expiry?" · expire le "+frDate(x.expiry):"")}); });
@@ -487,7 +517,8 @@ function alerts(){
 
 /* ---------- annuaire pilotes + fiche ---------- */
 const PREFIX = ["EL","AIT","BEN","OULD","SABER","HADJ","AHMED","NAIT","SAID","BRAHAM","LABBACI"];
-function nameKey(n){
+function nameKey(n){ return memo("nk:"+n, ()=>nameKeyRaw(n)); }
+function nameKeyRaw(n){
   const w = norm(n).split(" ").filter(Boolean); if (!w.length) return "";
   let i = 1; let sn = w[0];
   if (PREFIX.includes(w[0]) && w.length>2) { sn = w[0]+" "+w[1]; i = 2; }
@@ -523,19 +554,23 @@ let _sur = null;
 function surCount(){ if (_sur) return _sur; _sur = {}; (_reg||[]).forEach(p=>{ const s = keySur(nameKey(p.nom)); _sur[s]=(_sur[s]||0)+1; }); return _sur; }
 const pilotById = id => registry().find(p=>p.id===id);
 
+const normPad = t => memo("n:"+t, ()=>" "+norm(t)+" ");
 function textHas(text, p){
-  const t = " "+norm(text)+" ", s = keySur(nameKey(p.nom)); if (!s) return false;
+  const t = normPad(text), s = keySur(nameKey(p.nom)); if (!s) return false;
   const i = t.indexOf(" "+s+" "); if (i<0) return false;
   if ((surCount()[s]||0) <= 1) return true;
   const after = t.slice(i+s.length+2).split(" ")[0]||"", first = (norm(p.nom).split(" ")[s.split(" ").length]||"");
   return !!after && !!first && first.startsWith(after.slice(0,1)) && (after.length<3 || first.startsWith(after.slice(0,3)));
 }
-function simuFor(p){
-  const S = allSlots().filter(s=>textHas(s.crew,p) || textHas(s.instr,p));
+function simuFor(p){ return memo("sf:"+p.id, ()=>simuForRaw(p)); }
+function simuForRaw(p){
+  const sk = keySur(nameKey(p.nom)), needle = " "+sk+" ";
+  const S = sk ? allSlots().filter(s=>(normPad(s.crew).includes(needle) && textHas(s.crew,p)) || (normPad(s.instr).includes(needle) && textHas(s.instr,p))) : [];
   const past = S.filter(s=>s.date<T0), fut = S.filter(s=>s.date>=T0);
   return {last: past[past.length-1], next: fut[0], asTri: S.filter(s=>textHas(s.instr,p)).length, all:S};
 }
-function pilotInfo(p){
+function pilotInfo(p){ return memo("pi:"+p.id, ()=>pilotInfoRaw(p)); }
+function pilotInfoRaw(p){
   const find = (obj, fn) => Object.entries(obj).map(([id,d])=>({id,...d})).find(fn);
   const opl = Object.values(st.opl).find(o=>sameP(p, o.nom, o.matricule));
   const instr = find(st.instr, o=>sameP(p, o.nom, o.mat));
@@ -672,7 +707,8 @@ function vFiche(){
     if (s.phase==="checks" && (k==="local"||k==="nav")) { const v = o[k==="local"?"checkLocal":"checkNav"]; return v==="Validé"?"done":(chkPending(v)?"act":""); }
     return i===cur?"act":(i<cur?"done":""); };
   /* valeurs auto (planning) et saisies */
-  const autoLast = sim.last ? sim.last.date : "", autoNext = sim.next ? sim.next.date : "";
+  const SI = simuInfo(p), SS = simuStatus(SI);
+  const autoLast = SI.lastAuto, autoNext = SI.nextAuto;
   const lcr = lcRows().find(x=>(p.mat && x.id===String(p.mat)) || sameP(p, x.nom, x.id)), lcs = lcStatus(lcr);
   const cl = (I.valid && I.valid.items && I.valid.items.CL) || (lcs ? lcs.exp : "") || "";
   const licIso = fx.licence || (I.lic ? frToIso(I.lic.validite) : "");
@@ -697,8 +733,9 @@ function vFiche(){
 
   <section class="du"><div class="du-t">Données <span>touche une case pour modifier</span></div>
     <div class="flds">
-      ${fld("Dernier simu","dernierSimu","date", fx.dernierSimu||autoLast, !fx.dernierSimu&&autoLast?"d'après le planning":"")}
-      ${fld("Prochain simu","prochainSimu","date", fx.prochainSimu||autoNext, !fx.prochainSimu&&autoNext?`planning : S${sim.next.s} ${esc(sim.next.instr||"TRI ?")}`:"")}
+      ${fld("Dernier simu","dernierSimu","date", fx.dernierSimu||autoLast, !fx.dernierSimu&&autoLast?"d'après les plannings"+(SI.h&&SI.h.lastSrc&&SI.h.last===autoLast?" ("+esc(SI.h.lastSrc)+")":""):"")}
+      ${fld("Prochain simu","prochainSimu","date", fx.prochainSimu||autoNext, !fx.prochainSimu&&autoNext?(sim.next&&sim.next.date===autoNext?`planning : S${sim.next.s} ${esc(sim.next.instr||"TRI ?")}`:"d'après les plannings"):"")}
+      ${fld(`Simu récurrent (expire le, ${R().simuMois} mois)`,"simuExp","date", SI.exp, SI.exp?esc(SS.t):"pas d'historique", SS.k==="crit"?"crit":SS.k==="warn"?"warn":"")}
       ${fld("Line check (expire le)","lineCheck","date", cl, lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? "État DO : "+esc(lcs.t)+(lcr.last?" · dernier "+frDate(lcr.last):"") : (cl&&cellLevel(cl)==="crit"?"expiré":""), lcs && !(I.valid&&I.valid.items&&I.valid.items.CL) ? (lcs.k==="crit"?"crit":lcs.k==="warn"?"warn":"") : lv(cl))}
       ${fld("Licence (valide jusqu'au)","licence","date", licIso, "", lv(licIso))}
       ${ins?fld(`Legs (sur ${r.legsLacher})`,"legs","number", L, L>=r.legsAlerte?"alarme 36 legs":"", L>=r.legsAlerte?"crit":""):""}
@@ -776,7 +813,7 @@ function sortieBlock(p){
 /* enregistrement d'un champ de la fiche */
 async function saveField(p, f, value){
   const I = pilotInfo(p), r = R(), key = p.mat || p.id;
-  if (["dernierSimu","prochainSimu","licence","note","fonction"].includes(f)) return put("fiches/"+p.id, {...(st.fiches[p.id]||{}), [f]:value}, "Enregistré");
+  if (["dernierSimu","prochainSimu","licence","note","fonction","simuExp"].includes(f)) return put("fiches/"+p.id, {...(st.fiches[p.id]||{}), [f]:value}, "Enregistré");
   if (f==="lineCheck") { if (I.valid) return upd("valid/"+I.valid.id, {items:{...(I.valid.items||{}), CL:value}}, "Line check enregistré");
     return put("valid/"+key, {nom:p.nom, mat:p.mat||"", fonction:p.fonction||"", items:{CL:value}}, "Line check enregistré"); }
   const n = Math.max(0, +value||0);
@@ -1255,7 +1292,16 @@ function vValid(){
     ${LCf.slice(0,200).map(x=>{ const pp = registry().find(y=>(y.mat && y.mat===x.id) || sameP(y, x.nom, x.id));
       return `<tr><td>${pp?`<button class="link" data-pilot="${esc(pp.id)}"><b>${esc(x.nom)}</b></button>`:`<b>${esc(x.nom)}</b>`}<div class="mono">${esc(x.id)} · ${esc(x.base)}</div></td><td>${esc(x.pos==="CP"?"CPT":x.pos)}</td><td class="num">${frDate(x.last)}</td><td class="num">${frDate(x.expiry)}</td><td><span class="pill ${x.s.k==="mute"?"mute":x.s.k}">${esc(x.s.t)}</span></td></tr>`; }).join("") || `<tr><td colspan="5" class="note">Aucun pilote dans ce filtre.</td></tr>`}
     </tbody></table></div></section>` : "";
-  return `${lcBlock}<div class="note">Contrôle en ligne valable ${r.clMois} mois. Rouge : expiré · orange : moins de 30 jours. Touche une case pour saisir la date d'expiration.</div>
+  const sf = F("smF","todo"), SR = histRows().length ? activeReg().map(p=>({p, x:simuInfo(p)})).filter(o=>o.x.last||o.x.next).map(o=>({...o, s:simuStatus(o.x)})) : [];
+  const sCnt = k => SR.filter(o=> k==="todo" ? ["crit","warn"].includes(o.s.k) : k==="prog" ? o.s.k==="info" : o.s.k==="ok").length;
+  const SRf = SR.filter(o=>!lq || norm(o.p.nom).includes(lq)).filter(o=> sf==="all" || (sf==="todo" ? ["crit","warn"].includes(o.s.k) : sf==="prog" ? o.s.k==="info" : o.s.k==="ok"))
+    .sort((a,b)=>order[a.s.k]-order[b.s.k] || String(a.x.exp).localeCompare(String(b.x.exp)));
+  const simBlock = SR.length ? `<section class="du"><div class="du-t">Simulateurs récurrents · tous les ${R().simuMois} mois <span>${esc((st.ref.simuhist&&st.ref.simuhist.source)||"")}</span></div>
+    <div class="seg">${[["todo","À traiter"],["prog","Programmés"],["ok","À jour"],["all","Tous"]].map(([k,l])=>`<button data-fset="smF" data-val="${k}" aria-pressed="${k===sf}">${l} (${k==="all"?SR.length:sCnt(k)})</button>`).join("")}</div>
+    <div class="tbl"><table><thead><tr><th>Pilote</th><th>Dernier</th><th>Expire</th><th>Prochain</th><th>État</th></tr></thead><tbody>
+    ${SRf.slice(0,200).map(o=>`<tr><td><button class="link" data-pilot="${esc(o.p.id)}"><b>${esc(o.p.nom)}</b></button><div class="mono">${esc(o.p.fonction||"")}</div></td><td class="num">${frDate(o.x.last)||"—"}</td><td class="num">${frDate(o.x.exp)||"—"}</td><td class="num">${frDate(o.x.next)||"—"}</td><td><span class="pill ${o.s.k}">${esc(o.s.t)}</span></td></tr>`).join("") || `<tr><td colspan="5" class="note">Aucun pilote dans ce filtre.</td></tr>`}
+    </tbody></table></div></section>` : "";
+  return `${simBlock}${lcBlock}<div class="note">Contrôle en ligne valable ${r.clMois} mois. Rouge : expiré · orange : moins de 30 jours. Touche une case pour saisir la date d'expiration.</div>
   <form class="form" data-form="valid"><input type="text" id="vaNom" class="grow" placeholder="Pilote" required><select id="vaFn"><option>CPT</option><option>FO</option><option>TRI</option></select><button class="b pri" type="submit">Ajouter</button></form>
   <input type="search" id="vQ" placeholder="Chercher un pilote…" value="${esc(F("vQ",""))}">
   ${L.length?`<div class="tbl"><table><thead><tr><th>Pilote</th>${types.map(t=>`<th>${esc(t)}</th>`).join("")}<th></th></tr></thead><tbody>
@@ -1368,13 +1414,14 @@ function vRegles(){
   <div class="card"><h3>Lâcher en ligne</h3><div class="row">${fld("legsLacher","Legs pour le lâcher")}${fld("legsAlerte","Alarme à (legs)")}${fld("legsSafety","Legs avec safety pilot")}</div></div>
   <div class="card"><h3>Instruction PL et ab initio</h3><div class="row">${fld("plHeures","PL : heures")}${fld("plEtapes","PL : étapes")}${fld("initHeures","Ab initio : heures")}</div>
     <label class="note">Fin d'instruction PL quand<select data-regletxt="plMode" style="margin-left:6px"><option value="ou" ${r.plMode!=="et"?"selected":""}>heures OU étapes atteintes</option><option value="et" ${r.plMode==="et"?"selected":""}>heures ET étapes atteintes</option></select></label></div>
-  <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}</div>
+  <div class="card"><h3>Évaluations et validités</h3><div class="row">${fld("evalsStd","Vols d'éval")}${fld("clMois","Validité CL (mois)")}${fld("simuMois","Simu récurrent (mois)")}</div>
     <label class="note">Types de validités (séparés par des virgules)<input type="text" id="vtypes" value="${esc(r.validTypes.join(", "))}"></label><div class="row"><button class="b sm pri" data-vtypes="1">Enregistrer les types</button></div></div>`;
 }
 
 /* ================= RENDU ================= */
 const TITLES = {...Object.fromEntries(MODULES.map(([id,c])=>[id,c])), fiche:"Fiche pilote"};
 function render(){
+  _memo = {};
   const all = COLS.every(c=>st.loaded[c]);
   $("#back").hidden = ui.view==="home";
   $("#ttl").textContent = ui.view==="home" ? "FTM Desk" : (TITLES[ui.view]||"");
