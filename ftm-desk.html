@@ -203,6 +203,7 @@ details>summary{cursor:pointer;font:600 .84rem var(--font);color:var(--accent-in
 .fld{display:grid;gap:5px;background:var(--surface2);border:1px solid var(--line);border-radius:18px;padding:10px 12px;min-width:0}
 .fld.wide{grid-column:1/-1}
 .fld>span{font:500 .74rem var(--font);color:var(--muted)}
+.fld select{width:100%;font:600 1rem var(--font);color:var(--head)}
 .fld input{font:600 1rem var(--font);color:var(--head);background:var(--surface);border:1px solid var(--line2);padding:9px 11px;width:100%}
 .du>*,.flds>*,.fld>*{min-width:0}
 .fld input[type=date]{min-width:0;max-width:100%;font-size:.9rem;padding:8px 9px}
@@ -486,7 +487,7 @@ function sameP(p, nom, mat){
 }
 let _reg = null, _regSig = "";
 function registry(){
-  const sig = [st.ref.pilotes, st.instr, st.init, st.opl, st.max, st.valid, st.vols].map(x=>x?Object.keys(x).length:0).join(",") + JSON.stringify(Object.values(st.instr).map(x=>x.nom)) + ((st.ref.pilotes&&st.ref.pilotes.rows||[]).length);
+  const sig = [st.ref.pilotes, st.instr, st.init, st.opl, st.max, st.valid, st.vols].map(x=>x?Object.keys(x).length:0).join(",") + JSON.stringify(Object.values(st.instr).map(x=>x.nom)) + ((st.ref.pilotes&&st.ref.pilotes.rows||[]).length) + Object.entries(st.fiches).map(([k,f])=>k+(f.fonction||"")).join();
   if (_reg && sig===_regSig) return _reg;
   const rows = ((st.ref.pilotes&&st.ref.pilotes.rows)||[]).map(p=>({...p}));
   const have = (nom, mat) => rows.find(p=>(mat && p.mat && String(mat)===String(p.mat)) || nameKey(p.nom)===nameKey(nom));
@@ -496,6 +497,7 @@ function registry(){
   Object.values(st.init).forEach(o=>addV(o.nom, o.mat, o.pos));
   Object.values(st.max).forEach(o=>addV(o.nom, o.mat, o.pos));
   Object.values(st.valid).forEach(o=>addV(o.nom, o.mat, o.fonction));
+  rows.forEach(p=>{ const f = st.fiches[p.id]; if (f && f.fonction) p.fonction = f.fonction; });
   rows.sort((a,b)=>norm(a.nom).localeCompare(norm(b.nom)));
   _reg = rows; _regSig = sig; _sur = null; return rows;
 }
@@ -695,10 +697,11 @@ function vFiche(){
       <button class="b sm okb" data-lq="${ins.id}" data-act="lache" ${((ins.cl&&ins.cl.faits)||0)>=((ins.cl&&ins.cl.requis)||2)?"":"disabled"}>Lâché ▸ ab initio</button></div>`:""}
     ${o&&inEval(o)&&(o.exclus||[]).length?`<div class="note">TRI ayant déjà évalué : <span class="c-w">${(o.exclus||[]).map(esc).join(", ")}</span>${(o.evalsRestantes||0)>0?` · <button class="link c-cyn" data-go="evals">programmer un vol ▸</button>`:""}</div>`:""}
     ${evalsDone(o)?collegeBlock(p, o):""}
+    <label class="fld"><span>Fonction</span><select data-ff="fonction" aria-label="Fonction">${["","CPT","FO"].map(v=>`<option value="${v}" ${(p.fonction||"")===v?"selected":""}>${v||"Non renseignée"}</option>`).join("")}</select></label>
     <label class="fld wide"><span>Note</span><input type="text" data-ff="note" value="${esc(fx.note||"")}" placeholder="Ex. : en congé jusqu'au 20/11"></label>
   </section>
 
-  ${(p.fonction==="CPT" || I.tri) ? `<section class="du"><div class="du-t">Qualifications instructeur <span>ON / OFF</span></div>
+  ${(p.fonction!=="FO" || I.tri) ? `<section class="du"><div class="du-t">Qualifications instructeur <span>ON / OFF</span></div>
     <div class="sws">
       ${sw("qtri","TRI · instructeur qualification de type", !!I.tri, I.tri?"Proposé dans les permutations simu":"")}
       ${sw("qtre","TRE · examinateur", !!I.tre, "")}
@@ -754,7 +757,7 @@ function sortieBlock(p){
 /* enregistrement d'un champ de la fiche */
 async function saveField(p, f, value){
   const I = pilotInfo(p), r = R(), key = p.mat || p.id;
-  if (["dernierSimu","prochainSimu","licence","note"].includes(f)) return put("fiches/"+p.id, {...(st.fiches[p.id]||{}), [f]:value}, "Enregistré");
+  if (["dernierSimu","prochainSimu","licence","note","fonction"].includes(f)) return put("fiches/"+p.id, {...(st.fiches[p.id]||{}), [f]:value}, "Enregistré");
   if (f==="lineCheck") { if (I.valid) return upd("valid/"+I.valid.id, {items:{...(I.valid.items||{}), CL:value}}, "Line check enregistré");
     return put("valid/"+key, {nom:p.nom, mat:p.mat||"", fonction:p.fonction||"", items:{CL:value}}, "Line check enregistré"); }
   const n = Math.max(0, +value||0);
